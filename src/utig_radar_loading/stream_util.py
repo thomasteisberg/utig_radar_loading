@@ -16,7 +16,7 @@ import sys
 #streams_definitions = "/resfs/GROUPS/CRESIS/dataproducts/metadata/2022_Antarctica_BaslerMKB/UTIG_documentation/streams"
 
 
-def load_gzipped_stream_file(file_path, debug=False, parse=False, parse_kwargs={}):
+def load_gzipped_stream_file(file_path, debug=False, parse=True, parse_kwargs={'use_ct': True},):
     """
     Load a gzipped stream file as a pandas DataFrame with appropriate column names.
     
@@ -71,9 +71,10 @@ def load_gzipped_stream_file(file_path, debug=False, parse=False, parse_kwargs={
     # Check if a ct.gz file exists in the same directory
     ct_path = file_path.parent / "ct.gz"
     if ct_path.exists():
-        ct_file = gzip.open(ct_path, 'rt')
-        ct_columns = ['prj', 'set', 'trn', 'seq', 'clk_y', 'clk_n', 'clk_d', 'clk_h', 'clk_m', 'clk_s', 'clk_f', 'tim']
-        ct_df = pd.read_csv(ct_file, sep=r'\s+', names=ct_columns, index_col=False)
+        ct_df = load_ct_file(ct_path)
+        # ct_file = gzip.open(ct_path, 'rt')
+        # ct_columns = ['prj', 'set', 'trn', 'seq', 'clk_y', 'clk_n', 'clk_d', 'clk_h', 'clk_m', 'clk_s', 'clk_f', 'tim']
+        # ct_df = pd.read_csv(ct_file, sep=r'\s+', names=ct_columns, index_col=False)
 
         if debug:
             print(f"Found ct.gz file: {ct_path}")
@@ -95,6 +96,18 @@ def load_gzipped_stream_file(file_path, debug=False, parse=False, parse_kwargs={
 
     return df
 
+def load_ct_file(file_path : str):
+    path = Path(file_path)
+    if path.is_file():
+        path = path.parent
+    
+    path = path / 'ct.gz'
+    if not path.exists():
+        raise FileNotFoundError(f"ct.gz file not found at {file_path}")
+
+    ct_file = gzip.open(path, 'rt')
+    ct_columns = ['prj', 'set', 'trn', 'seq', 'clk_y', 'clk_n', 'clk_d', 'clk_h', 'clk_m', 'clk_s', 'clk_f', 'tim']
+    return pd.read_csv(ct_file, sep=r'\s+', names=ct_columns, index_col=False)
 
 def get_stream_headers(stream_type):
     if stream_type == 'GPSap3':
