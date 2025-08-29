@@ -96,7 +96,7 @@ def load_gzipped_stream_file(file_path, debug=False, parse=True, parse_kwargs={'
 
     return df
 
-def load_ct_file(file_path : str):
+def load_ct_file(file_path : str, read_csv_kwargs = {}):
     path = Path(file_path)
     if path.is_file():
         path = path.parent
@@ -107,7 +107,7 @@ def load_ct_file(file_path : str):
 
     ct_file = gzip.open(path, 'rt')
     ct_columns = ['prj', 'set', 'trn', 'seq', 'clk_y', 'clk_n', 'clk_d', 'clk_h', 'clk_m', 'clk_s', 'clk_f', 'tim']
-    return pd.read_csv(ct_file, sep=r'\s+', names=ct_columns, index_col=False)
+    return pd.read_csv(ct_file, sep=r'\s+', names=ct_columns, index_col=False, **read_csv_kwargs)
 
 def get_stream_headers(stream_type):
     if stream_type == 'GPSap3':
@@ -222,8 +222,8 @@ def parse_CT(df):
     CT headers: clk_y, clk_n, clk_d, clk_h, clk_m, clk_s, clk_f
     where:
     - clk_y: year
-    - clk_n: day of year (1-366)
-    - clk_d: day (possibly redundant with clk_n)
+    - clk_n: month
+    - clk_d: day
     - clk_h: hour
     - clk_m: minute
     - clk_s: second
@@ -252,18 +252,15 @@ def parse_CT(df):
     timestamps = []
     for idx, row in df.iterrows():
         year = int(row['clk_y'])
-        day_of_year = int(row['clk_n'])
+        month = int(row['clk_n'])
+        day = int(row['clk_d'])
         hour = int(row['clk_h'])
         minute = int(row['clk_m'])
         second = int(row['clk_s'])
         microsecond = int(row['clk_f'] * 1e6) if row['clk_f'] < 1 else int((row['clk_f'] % 1) * 1e6)
-        
-        # Create datetime from year and day of year
-        dt = datetime(year, 1, 1) + timedelta(days=day_of_year - 1, 
-                                              hours=hour, 
-                                              minutes=minute, 
-                                              seconds=second,
-                                              microseconds=microsecond)
+
+        # Create datetime from year, month, and day
+        dt = datetime(year, month, day, hour, minute, second, microsecond)
         timestamps.append(dt)
     
     df['TIMESTAMP'] = pd.to_datetime(timestamps)
