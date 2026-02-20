@@ -115,7 +115,7 @@ params:
     echo.elev_comp: 3
     echo.depth: "[publish_echogram_switch(Bbad,0.25,Surface_Elev,-3500,DBottom,-100),max(Surface_Elev+100)]"
     echo.er_ice: 3.15
-    ops.location: "antarctica"
+    ops.location: "antarctic"
 
   analysis_noise:
     block_size: 10000
