@@ -6,6 +6,7 @@ import gzip
 from pathlib import Path
 
 import utig_radar_loading.stream_util as stream_util
+import utig_radar_loading.opr_gps_file_generation as opr_gps_file_generation
 
 #
 # df_files
@@ -78,10 +79,12 @@ def create_artifacts_df(file_index_df : pd.DataFrame, datasets=['UTIG1', 'UTIG2'
 # Functions for grouping df_artifacts by transect and selecting desired streams
 #
 
-def arrange_by_transect(df_artifacts, streams):
+def arrange_by_transect(df_artifacts, streams, ignore_set=False):
     """
     Group by transects (unique combinations of (prj, set, trn)) and pull out paths
     to the desired data streams.
+
+    If ignore_set is True, then transects will be grouped by only prj and trn.
 
     streams is a dictionary mapping names of data categories to a list of acceptable
     stream types. For example:
@@ -126,13 +129,36 @@ def arrange_by_transect(df_artifacts, streams):
 
         return df
 
-    df = df_artifacts.groupby(['prj', 'set', 'trn']).apply(agg_fn, include_groups=False)
+    if ignore_set:
+        groupby_keys = ['prj', 'trn']
+    else:
+        groupby_keys = ['prj', 'set', 'trn']
+    
+    df = df_artifacts.groupby(groupby_keys).apply(agg_fn, include_groups=False)
     df.index = df.index.droplevel(-1)
     return df
 
 def get_start_timestamp(transect):
-    # Iterate over stream data until we find one that has a valid context file
-    
+    """
+    Get the start timestamp for a transect.
+
+    Priority:
+    1. If postprocessed_gps_path is available, use GPS_TIME from that (most accurate)
+    2. Otherwise, use COMP_TIME_DT from field GPS context file (radar computer time)
+    """
+
+    # Try postprocessed GPS first (most accurate)
+    if 'postprocessed_gps_path' in transect and pd.notna(transect['postprocessed_gps_path']):
+        try:
+            gps_df = opr_gps_file_generation.load_and_parse_postprocessed_gps_file(transect['postprocessed_gps_path'])
+            if len(gps_df) > 0:
+                # Convert GPS_TIME (Unix epoch seconds) to datetime
+                return pd.Timestamp.fromtimestamp(gps_df.iloc[0]['GPS_TIME'])
+        except Exception as e:
+            print(f"Warning: Could not load postprocessed GPS for {transect.name}, falling back to field GPS: {e}")
+            # Fall through to field GPS
+
+    # Fall back to field GPS context file (radar computer time)
     fp = transect['gps_path']
     if isinstance(fp, float) and np.isnan(fp):
         return None

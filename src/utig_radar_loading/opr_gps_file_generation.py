@@ -130,15 +130,13 @@ def load_and_parse_postprocessed_gps_file(gps_path: Union[str, Path]) -> pd.Data
     df = pd.read_csv(gps_path, sep=r'\s+', names=columns, comment='#', header=None)
 
     # Create GPS_TIME column from YEAR, DOY, SOD
-    # Note: The input YEAR, DOY, and SOD are in GPS time (not UTC)
-    # GPS time started on January 6, 1980 and doesn't include leap seconds
-    # TODO: This is almost certainly wrong (by failing to account for leap seconds)
+    # Note: The input YEAR, DOY, and SOD are in UTC time
 
     dt = pd.to_datetime(df['YEAR'].astype(str) + df['DOY'].astype(str).str.zfill(3), format='%Y%j') + pd.to_timedelta(df['SOD'], unit='s')
 
-    # Use astropy to convert from UTC time to GPS time, encoded as seconds from the Unix epoch
+    # Use astropy to convert from UTC time to CReSIS "GPS_time", which is ANSI-C time (seconds since Jan 1, 1970)
     t_utc = astropy.time.Time(dt, format='datetime64', scale='utc')
-    df['GPS_TIME'] = t_utc.gps + ((GPS_EPOCH - UNIX_EPOCH) / pd.Timedelta('1s'))
+    df['GPS_TIME'] = t_utc.unix
 
     # Convert PITCH, ROLL, and HEADING from degrees to radians
     df['PITCH'] = np.deg2rad(df['PITCH'])
@@ -489,10 +487,12 @@ def make_segment_gps_file(x, output_base_dir, overwrite=False):
     if 'postprocessed_gps_path' in x:
         if x['postprocessed_gps_path'].isnull().any():
             warnings.warn(f"Post-processed GPS paths contain null values for segment {x['segment_date_str'].iloc[0]}_{x['segment_number'].iloc[0]}")
+            postprocessed_gps_paths = None
         else:
             postprocessed_gps_paths = list(x['postprocessed_gps_path'].unique())
     else:
         print("[WARNING] No post-processed GPS paths provided.")
+        postprocessed_gps_paths = None
 
     output_path = output_base_dir / Path(f"gps_{x['segment_date_str'].iloc[0]}_{x['segment_number'].iloc[0]}.mat")
 

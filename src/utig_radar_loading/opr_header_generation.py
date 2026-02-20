@@ -8,7 +8,7 @@ from utig_radar_loading import stream_util
 
 def create_header_df(input_filename, waveform_record_length=6400):
     """
-    Create header dataframe for RADnh3 and RADnh5 radar data files.
+    Create header dataframe for RADjh1, RADnh3, and RADnh5 radar data files.
     Automatically detects file type and number of channels.
 
     Parameters:
@@ -24,6 +24,11 @@ def create_header_df(input_filename, waveform_record_length=6400):
         DataFrame with columns: tim, COMP_TIME, and ch{N}_offset for each channel
         Index is rseq (radar sequence number)
     """
+    # Detect RADjh1 files by directory name (unfoc.get_radar_stream doesn't support RADjh1 yet)
+    path = Path(input_filename)
+    if path.parent.name == 'RADjh1':
+        return _create_header_df_radjh1(input_filename, waveform_record_length)
+
     # Auto-detect stream type (RADnh3 or RADnh5)
     stream = unfoc.get_radar_stream(input_filename)
 
@@ -92,6 +97,82 @@ def create_header_df(input_filename, waveform_record_length=6400):
     if max_offset_df > max_offset_allowed:
         print(f"[WARNING] Header has offset of {max_offset_df}, which is too large for a file of {file_size} bytes. Violating rows will be dropped.")
         df = df[df[ch_cols].max(axis=1) <= max_offset_allowed]
+
+    return df
+
+def _create_header_df_radjh1(input_filename, waveform_record_length=6400):
+    """
+    Create header dataframe for RADjh1 radar data files (HiCARS1 format).
+    RADjh1 files have no headers, just raw trace data.
+
+    Parameters:
+    -----------
+    input_filename : str
+        Path to input bxds file (either bxds1 or bxds2)
+    waveform_record_length : int
+        Length of waveform records in bytes (default: 6400 for RADjh1)
+
+    Returns:
+    --------
+    pd.DataFrame
+        DataFrame with columns: tim, COMP_TIME, and ch{N}_offset for this channel
+        Index is rseq (radar sequence number)
+    """
+    # Step 1: Load CT (coherent time) data
+    ct_data = stream_util.load_ct_file(input_filename)
+    ct_data = stream_util.parse_CT(ct_data)
+
+    # Step 2: Determine channel from filename
+    path = Path(input_filename)
+    filename = path.name
+    if filename == 'bxds1':
+        channel = 1
+    elif filename == 'bxds2':
+        channel = 2
+    else:
+        raise ValueError(f"Expected bxds1 or bxds2, got {filename}")
+
+    # Step 3: Get trace count from file size
+    # RADjh1 files have no headers, just raw data: ntraces × 3200 samples × 2 bytes
+    file_size = path.stat().st_size
+    if file_size % waveform_record_length != 0:
+        raise ValueError(f"File size {file_size} is not divisible by {waveform_record_length}")
+    ntraces = file_size // waveform_record_length
+
+    # Step 4: Calculate offsets (simple for RADjh1 - no headers)
+    # offset = trace_number × waveform_record_length
+    offsets = np.arange(ntraces) * waveform_record_length
+
+    # Step 5: Build DataFrame for this channel
+    # Handle case where CT file might have different number of lines
+    n_ct_records = len(ct_data)
+    if n_ct_records != ntraces:
+        print(f"[WARNING] CT file has {n_ct_records} records but data file has {ntraces} traces")
+        # Use minimum of both
+        n_records = min(n_ct_records, ntraces)
+        ct_data = ct_data.iloc[:n_records]
+        offsets = offsets[:n_records]
+
+    df_dict = {
+        'tim': ct_data['tim'].values,
+        'COMP_TIME': ct_data['COMP_TIME'].values,
+        'rseq': ct_data['seq'].values,  # RADjh1 uses CT seq field
+        f'ch{channel}_offset': offsets  # ch1_offset or ch2_offset
+    }
+
+    df = pd.DataFrame(df_dict)
+    df = df.set_index('rseq')
+
+    # Step 6: Handle missing data
+    with pd.option_context('future.no_silent_downcasting', True):
+        df = df.fillna(-2**31)
+
+    # Validate offsets don't exceed file size
+    max_offset_allowed = file_size - waveform_record_length
+    max_offset_df = df[f'ch{channel}_offset'].max()
+    if max_offset_df > max_offset_allowed:
+        print(f"[WARNING] Header has offset of {max_offset_df}, which is too large for a file of {file_size} bytes. Violating rows will be dropped.")
+        df = df[df[f'ch{channel}_offset'] <= max_offset_allowed]
 
     return df
 
