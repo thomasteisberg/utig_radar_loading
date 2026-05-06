@@ -1,4 +1,6 @@
-
+season_name: "2015_Antarctica_BaslerJKB"
+postprocessed_gps_dir: "/resfs/GROUPS/CRESIS/dataproducts/metadata/2015_Antarctica_BaslerJKB/gps"
+datasets: ["UTIG1"]
 
 # Defaults for generating parameter spreadsheet tabs
 params:

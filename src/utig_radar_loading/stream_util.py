@@ -363,40 +363,47 @@ def calculate_track_distance_km(df, lat_col='LAT', lon_col='LON'):
 
 def parse_GPSnc1(df):
     """
-    Parse GPSnc1 format dataframe and add LAT, LON, TIMESTAMP columns.
-    
-    GPSnc1 contains:
-    - gps_time, gps_subsecs: GPS time information
-    - lat_ang: Latitude in decimal degrees (WGS-84)
-    - lon_ang: Longitude in decimal degrees (WGS-84)
-    
-    Parameters:
-    -----------
-    df : pandas.DataFrame
-        DataFrame from load_xds_stream_file with GPSnc1 data
-        
-    Returns:
-    --------
-    pandas.DataFrame
-        DataFrame with added LAT, LON, TIMESTAMP columns
+    Parse GPSnc1 format dataframe and add LAT, LON, GPS_TIME columns.
+
+    GPSnc1 is from the National Instruments PXI-6682/6683 timing card.
+    When locked to GPS, the card reports time in the GPS time scale
+    (continuous SI seconds with no leap second adjustments) as seconds
+    since the NI/LabVIEW epoch (1904-01-01 00:00:00).
+
+    The card also reports ``utc_offset``, which is TAI-UTC (the cumulative
+    number of leap seconds). Since GPS = TAI - 19s (a fixed constant),
+    the GPS-UTC offset is ``(utc_offset - 19)`` seconds.
+
+    This function converts from GPS time to ANSI-C time (POSIX seconds
+    since 1970-01-01 00:00:00 UTC) by subtracting the GPS-UTC offset.
     """
     df = df.copy()
-    
-    # Map latitude and longitude directly (already in decimal degrees)
+
     if 'lat_ang' in df.columns:
         df['LAT'] = df['lat_ang']
     else:
         raise ValueError("Column 'lat_ang' not found in GPSnc1 data")
-        
+
     if 'lon_ang' in df.columns:
         df['LON'] = df['lon_ang']
     else:
         raise ValueError("Column 'lon_ang' not found in GPSnc1 data")
 
-    seconds_since_epoch = pd.to_timedelta(df['gps_time'].astype('int64') + df['gps_subsecs'].astype('uint64') / (2**64), unit='s')
-    gps_time = NI_EPOCH + seconds_since_epoch # Seconds since NI epoch
-    df['GPS_TIME'] = (gps_time - UNIX_EPOCH) / pd.Timedelta('1s') # For consistency with OPR, GPS_TIME is seconds since Unix epoch
-        
+    # Step 1: NI/LabVIEW seconds since 1904-01-01, in GPS time scale
+    ni_seconds = df['gps_time'].astype('int64') + df['gps_subsecs'].astype('uint64') / (2**64)
+
+    # Step 2: Convert to datetime in GPS time scale
+    # (pandas treats every day as 86400s, matching the GPS convention)
+    gps_datetime = NI_EPOCH + pd.to_timedelta(ni_seconds, unit='s')
+
+    # Step 3: Convert GPS datetime to UTC datetime
+    # utc_offset is TAI-UTC (leap seconds); GPS-UTC = utc_offset - 19
+    gps_utc_offset_s = df['utc_offset'] - 19
+    utc_datetime = gps_datetime - pd.to_timedelta(gps_utc_offset_s, unit='s')
+
+    # Step 4: ANSI-C time (seconds since 1970-01-01 00:00:00 UTC)
+    df['GPS_TIME'] = (utc_datetime - UNIX_EPOCH) / pd.Timedelta('1s')
+
     return df
 
 

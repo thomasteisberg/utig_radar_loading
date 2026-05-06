@@ -153,7 +153,7 @@ def get_start_timestamp(transect):
             gps_df = opr_gps_file_generation.load_and_parse_postprocessed_gps_file(transect['postprocessed_gps_path'])
             if len(gps_df) > 0:
                 # Convert GPS_TIME (Unix epoch seconds) to datetime
-                return pd.Timestamp.fromtimestamp(gps_df.iloc[0]['GPS_TIME'])
+                return pd.Timestamp.fromtimestamp(gps_df.iloc[0]['GPS_TIME'], tz='UTC')
         except Exception as e:
             print(f"Warning: Could not load postprocessed GPS for {transect.name}, falling back to field GPS: {e}")
             # Fall through to field GPS
@@ -206,7 +206,7 @@ def add_postprocessed_gps_paths(df_season, season_gps_postprocessed_dir, ignore_
     df_season['postprocessed_gps_path'] = np.nan
     df_season['postprocessed_gps_type'] = np.nan
 
-    gps_files = glob.glob(f"{season_gps_postprocessed_dir}/*PUTG1B_*_position.txt")
+    gps_files = glob.glob(f"{season_gps_postprocessed_dir}/**/*PUT[GN]1B_*_position.txt")
     for f in gps_files:
         parts = Path(f).stem.split('_')
         if len(parts) < 6:

@@ -125,7 +125,7 @@ def load_and_parse_postprocessed_gps_file(gps_path: Union[str, Path]) -> pd.Data
         first_line = f.readline().strip()
     if not (("EPUTG1B" in first_line) or ("SPUTG1B" in first_line) or ("IPUTG1B" in first_line)):
         warnings.warn(f"File {gps_path} does not appear to be in expected post-processed GPS format (missing 'EPUTG1B' or 'SPUTG1B' in first line)")
-        return pd.DataFrame()
+        #return pd.DataFrame()
 
     df = pd.read_csv(gps_path, sep=r'\s+', names=columns, comment='#', header=None)
 
