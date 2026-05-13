@@ -1,11 +1,11 @@
-season_name: "2008_Antarctica_BaslerJKB"
-postprocessed_gps_dir: "/resfs/GROUPS/CRESIS/dataproducts/metadata/2008_Antarctica_BaslerJKB/gps"
+season_name: "2009_Antarctica_BaslerJKB"
+postprocessed_gps_dir: "/resfs/GROUPS/CRESIS/dataproducts/metadata/2009_Antarctica_BaslerJKB/gps"
 datasets: ["UTIG1"]
 
 # Defaults for generating parameter spreadsheet tabs
 params:
-  # Default parameters for 2008_Antarctica_BaslerJKB
-  # Based on default_radar_params_2022_Antarctica_BaslerMKB_rds.m
+  # Default parameters for 2009_Antarctica_BaslerJKB
+  # Based on 2008_Antarctica_BaslerJKB.yaml
   
   cmd:
     frms: ~

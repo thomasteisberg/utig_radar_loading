@@ -19,7 +19,7 @@ def load_file_index_df(base_path : str, cache_file : str, read_cache : bool = Tr
     if read_cache and cache_path.exists():
         # Read from cache
         print(f"Reading from cache file {cache_path}")
-        df_files = pd.read_csv(cache_path, index_col=0)
+        df_files = pd.read_csv(cache_path, index_col=0, low_memory=False)
         df_files.columns = df_files.columns.astype(int)
     else:
         # Load and process files to create DataFrame
@@ -109,7 +109,7 @@ def arrange_by_transect(df_artifacts, streams, ignore_set=False):
             df[f"{data_category}_path"] = np.nan
             
             matching_entry = group[(group['stream'].isin(streams[data_category]['stream_types'])) & \
-                (group['file_name'].isin(streams[data_category]['file_names']))]
+                (group['file_name'].isin(streams[data_category]['file_names']))].copy()
             if not matching_entry.empty:
                 # Sort matching_entry by preferred stream type order
                 preferred_order = {stype: i for i, stype in enumerate(streams[data_category]['stream_types'])}
