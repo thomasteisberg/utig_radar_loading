@@ -1,0 +1,14 @@
+# Base paths for raw UTIG field data
+raw_data_base_path: "/kucresis/scratch/data/UTIG"
+
+# File index cache (speeds up repeated runs)
+file_index_cache: "outputs/file_index.csv"
+
+# Base directories for outputs (season name is appended automatically)
+gps_support_base_dir: "/resfs/GROUPS/CRESIS/dataproducts/opr_support/gps"
+header_base_dir: "/kucresis/scratch/tteisberg_sta/scripts/opr_user_tmp/headers/rds"
+params_output_base_dir: "outputs/params"
+maps_output_base_dir: "outputs/maps"
+
+# Dask parallelization settings
+dask_workers: 10
