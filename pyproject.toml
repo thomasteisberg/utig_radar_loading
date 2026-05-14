@@ -25,13 +25,8 @@ dependencies = [
     "xopr>=0.2.1",
 ]
 
-[tool.uv.workspace]
-members = [
-    "unfoc",
-]
-
 [tool.uv.sources]
-utig-unfoc = { workspace = true }
+utig-unfoc = { git = "https://github.com/UTIG/unfoc", branch = "master" }
 
 [build-system]
 requires = ["setuptools>=42"]
