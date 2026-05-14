@@ -1,0 +1,1 @@
+Notebooks in this "archive" directory are from the old process of radar data ingest. These have been deprecated in favor of the new scripts, but might be helpful for reference or debugging.

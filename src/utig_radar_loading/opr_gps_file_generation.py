@@ -120,12 +120,15 @@ def merge_position_files(
 def load_and_parse_postprocessed_gps_file(gps_path: Union[str, Path]) -> pd.DataFrame:
     columns = "YEAR DOY SOD SEQ LON LAT AC_ELEVATION ROLL PITCH HEADING STDDEV NS_ACCELERATION EW_ACCELERATION VERT_ACCELERATION".split(" ")
 
-    # Read first line to check for "EPUTG1B" format
+    # Check filename and header for known post-processed GPS format markers.
+    # 2008/2015 files have a "# ... <PREFIX> data format" header; 2009 has no header
+    # so the filename itself is the only signal.
+    known_prefixes = ("EPUTG1B", "SPUTG1B", "IPUTG1B", "IPUTN1B")
+    name = str(gps_path)
     with open(gps_path, 'r') as f:
         first_line = f.readline().strip()
-    if not (("EPUTG1B" in first_line) or ("SPUTG1B" in first_line) or ("IPUTG1B" in first_line)):
-        warnings.warn(f"File {gps_path} does not appear to be in expected post-processed GPS format (missing 'EPUTG1B' or 'SPUTG1B' in first line)")
-        #return pd.DataFrame()
+    if not any(p in name or p in first_line for p in known_prefixes):
+        warnings.warn(f"File {gps_path} does not appear to be in expected post-processed GPS format (no known prefix in filename or header)")
 
     df = pd.read_csv(gps_path, sep=r'\s+', names=columns, comment='#', header=None)
 
