@@ -26,7 +26,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-from utig_radar_loading import file_util, stream_util, opr_gps_file_generation
+from opr_ingest.utig import file_index, postprocessed_gps, stream_util
 
 # ============================================================================
 # Configuration
@@ -65,7 +65,7 @@ def run_comparison(postprocessed_gps_path, trn_prefix, df_artifacts):
     # ========================================================================
 
     print(f"\nLoading post-processed GPS file: {postprocessed_gps_path}")
-    df_postproc = opr_gps_file_generation.load_and_parse_postprocessed_gps_file(postprocessed_gps_path)
+    df_postproc = postprocessed_gps.load_and_parse_postprocessed_gps_file(postprocessed_gps_path)
     print(f"  Records: {len(df_postproc)}")
     print(f"  GPS_TIME range: {df_postproc['GPS_TIME'].min():.2f} to {df_postproc['GPS_TIME'].max():.2f}")
     t_start_postproc = pd.Timestamp.utcfromtimestamp(df_postproc['GPS_TIME'].min())
@@ -427,8 +427,8 @@ def run_comparison(postprocessed_gps_path, trn_prefix, df_artifacts):
 if __name__ == '__main__':
     # Load file index once (shared across all comparisons)
     print("Loading file index...")
-    df_files = file_util.load_file_index_df(base_path, cache_file, read_cache=True)
-    df_artifacts = file_util.create_artifacts_df(df_files)
+    df_files = file_index.load_file_index_df(base_path, cache_file, read_cache=True)
+    df_artifacts = file_index.create_artifacts_df(df_files)
 
     if len(sys.argv) >= 3:
         # CLI mode: path and trn_prefix provided

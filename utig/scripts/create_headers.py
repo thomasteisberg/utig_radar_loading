@@ -1,7 +1,7 @@
 """Stage 3: Create temporary header files from parameter spreadsheet.
 
-Usage:
-    uv run scripts/create_headers.py path/to/season_params.xlsx [--overwrite]
+Usage (from repo root):
+    uv run utig/scripts/create_headers.py path/to/season_params.xlsx [--overwrite]
 """
 
 import argparse
@@ -12,13 +12,14 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from utig_radar_loading import opr_header_generation, param_spreadsheet
+from opr_ingest.core import opr_headers, params
+from opr_ingest.utig import headers as utig_headers
 
 
 def load_user_config() -> dict:
     """Load user_config.yaml from project root."""
-    # Try a few locations
-    for candidate in [Path("user_config.yaml"), Path(__file__).parent.parent / "user_config.yaml"]:
+    # CWD first (preferred — run from repo root), fall back to walking up from this file.
+    for candidate in [Path("user_config.yaml"), Path(__file__).resolve().parents[2] / "user_config.yaml"]:
         if candidate.exists():
             with open(candidate) as f:
                 return yaml.safe_load(f)
@@ -27,7 +28,7 @@ def load_user_config() -> dict:
 
 def get_and_save_header(path: str, fn: str):
     """Get header information and save to .mat file."""
-    header = opr_header_generation.get_header_information(path)
+    header = utig_headers.get_header_information(path)
     fn_path = Path(fn)
     fn_path.parent.mkdir(parents=True, exist_ok=True)
     hdf5storage.savemat(str(fn_path), header, format="7.3", truncate_existing=True)
@@ -66,7 +67,7 @@ def collect_radar_files(sheets: dict, processable, user_config: dict):
         if pd.isna(board_folder_str) or pd.isna(base_dir):
             continue
 
-        folder_names = param_spreadsheet.parse_matlab_cell_string(str(board_folder_str))
+        folder_names = params.parse_matlab_cell_string(str(board_folder_str))
 
         for folder_name in folder_names:
             # Determine the full radar file path
@@ -80,7 +81,7 @@ def collect_radar_files(sheets: dict, processable, user_config: dict):
                 for channel_file in ["bxds1", "bxds2"]:
                     channel_path = Path(base_dir) / folder_name / channel_file
                     if channel_path.exists():
-                        header_fn = opr_header_generation.get_header_file_location(
+                        header_fn = opr_headers.get_header_file_location(
                             str(channel_path), str(header_base_dir)
                         )
                         radar_paths.append(str(channel_path))
@@ -89,7 +90,7 @@ def collect_radar_files(sheets: dict, processable, user_config: dict):
                         print(f"[WARNING] RADjh1 channel file not found: {channel_path}")
             else:
                 if full_path.exists():
-                    header_fn = opr_header_generation.get_header_file_location(
+                    header_fn = opr_headers.get_header_file_location(
                         str(full_path), str(header_base_dir)
                     )
                     radar_paths.append(str(full_path))
@@ -110,11 +111,11 @@ def main():
 
     spreadsheet_path = Path(args.spreadsheet)
     if spreadsheet_path.suffix == ".xlsx":
-        sheets = param_spreadsheet.read_xlsx(spreadsheet_path)
+        sheets = params.read_xlsx(spreadsheet_path)
     else:
-        sheets = param_spreadsheet.read_csvs(spreadsheet_path)
+        sheets = params.read_csvs(spreadsheet_path)
 
-    processable = param_spreadsheet.segments_to_process(sheets)
+    processable = params.segments_to_process(sheets)
     print(f"Found {len(processable)} segments to process")
 
     radar_paths, header_locations = collect_radar_files(sheets, processable, user_config)

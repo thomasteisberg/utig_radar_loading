@@ -1725,6 +1725,57 @@ wheels = [
 ]
 
 [[package]]
+name = "opr-ingest"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "astropy" },
+    { name = "cartopy" },
+    { name = "dask", extra = ["complete"] },
+    { name = "geoviews" },
+    { name = "h5py" },
+    { name = "hdf5storage" },
+    { name = "holoviews" },
+    { name = "hvplot" },
+    { name = "ipykernel" },
+    { name = "jupyter" },
+    { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "openpyxl" },
+    { name = "pandas" },
+    { name = "pyarrow" },
+    { name = "seaborn" },
+    { name = "selenium" },
+    { name = "tqdm" },
+    { name = "utig-unfoc" },
+    { name = "xopr" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "astropy", specifier = ">=7.1.0" },
+    { name = "cartopy", specifier = ">=0.25.0" },
+    { name = "dask", extras = ["complete"], specifier = ">=2025.9.1" },
+    { name = "geoviews", specifier = ">=1.14.1" },
+    { name = "h5py", specifier = ">=3.14.0" },
+    { name = "hdf5storage", specifier = ">=0.2.1" },
+    { name = "holoviews", specifier = ">=1.21.0" },
+    { name = "hvplot", specifier = ">=0.12.1" },
+    { name = "ipykernel", specifier = ">=6.30.1" },
+    { name = "jupyter", specifier = ">=1.1.1" },
+    { name = "matplotlib", specifier = ">=3.10.5" },
+    { name = "numpy", specifier = ">=2.3.2" },
+    { name = "openpyxl", specifier = ">=3.1.0" },
+    { name = "pandas", specifier = ">=2.3.2" },
+    { name = "pyarrow", specifier = ">=21.0.0" },
+    { name = "seaborn", specifier = ">=0.13.2" },
+    { name = "selenium", specifier = ">=4.35.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
+    { name = "utig-unfoc", git = "https://github.com/UTIG/unfoc?branch=master" },
+    { name = "xopr", specifier = ">=0.2.1" },
+]
+
+[[package]]
 name = "outcome"
 version = "1.3.0.post0"
 source = { registry = "https://pypi.org/simple" }
@@ -2776,57 +2827,6 @@ wheels = [
 [package.optional-dependencies]
 socks = [
     { name = "pysocks" },
-]
-
-[[package]]
-name = "utig-radar-loading"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "astropy" },
-    { name = "cartopy" },
-    { name = "dask", extra = ["complete"] },
-    { name = "geoviews" },
-    { name = "h5py" },
-    { name = "hdf5storage" },
-    { name = "holoviews" },
-    { name = "hvplot" },
-    { name = "ipykernel" },
-    { name = "jupyter" },
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "openpyxl" },
-    { name = "pandas" },
-    { name = "pyarrow" },
-    { name = "seaborn" },
-    { name = "selenium" },
-    { name = "tqdm" },
-    { name = "utig-unfoc" },
-    { name = "xopr" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "astropy", specifier = ">=7.1.0" },
-    { name = "cartopy", specifier = ">=0.25.0" },
-    { name = "dask", extras = ["complete"], specifier = ">=2025.9.1" },
-    { name = "geoviews", specifier = ">=1.14.1" },
-    { name = "h5py", specifier = ">=3.14.0" },
-    { name = "hdf5storage", specifier = ">=0.2.1" },
-    { name = "holoviews", specifier = ">=1.21.0" },
-    { name = "hvplot", specifier = ">=0.12.1" },
-    { name = "ipykernel", specifier = ">=6.30.1" },
-    { name = "jupyter", specifier = ">=1.1.1" },
-    { name = "matplotlib", specifier = ">=3.10.5" },
-    { name = "numpy", specifier = ">=2.3.2" },
-    { name = "openpyxl", specifier = ">=3.1.0" },
-    { name = "pandas", specifier = ">=2.3.2" },
-    { name = "pyarrow", specifier = ">=21.0.0" },
-    { name = "seaborn", specifier = ">=0.13.2" },
-    { name = "selenium", specifier = ">=4.35.0" },
-    { name = "tqdm", specifier = ">=4.67.1" },
-    { name = "utig-unfoc", git = "https://github.com/UTIG/unfoc?branch=master" },
-    { name = "xopr", specifier = ">=0.2.1" },
 ]
 
 [[package]]
