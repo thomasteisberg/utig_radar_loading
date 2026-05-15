@@ -1,5 +1,5 @@
 [project]
-name = "utig_radar_loading"
+name = "opr_ingest"
 version = "0.1.0"
 requires-python = ">=3.12,<3.14"
 dependencies = [

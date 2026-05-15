@@ -2,19 +2,21 @@
 
 This document describes the workflow for ingesting pre-2020 UTIG ICECAP radar data into OPR using a set of Python CLI scripts.
 
+All commands below are run from the repo root.
+
 ## Prerequisites
 
 - **Python**: 3.12+ with `uv` for dependency management
 - **MATLAB**: Required for radar processing stages (after Python preprocessing)
 - **Data access**: Raw UTIG field data at `/kucresis/scratch/data/UTIG/`, post-processed GPS data at `/resfs/GROUPS/CRESIS/dataproducts/metadata/`
-- **Configuration**: A `user_config.yaml` in the project root with your local paths (see below)
-- **Season config**: A YAML file in `seasons_config/` for the season being processed
+- **Configuration**: A `user_config.yaml` in the repo root with your local paths (see below)
+- **Season config**: A YAML file in `utig/seasons_config/` for the season being processed
 
 ## Configuration
 
 ### `user_config.yaml`
 
-Create this file in the project root. It contains user/environment-specific paths that are not season-specific:
+Create this file in the repo root. It contains user/environment-specific paths that are not season-specific and is shared across radar-system pipelines:
 
 ```yaml
 raw_data_base_path: "/kucresis/scratch/data/UTIG"
@@ -28,7 +30,7 @@ dask_workers: 10
 
 ### Season config
 
-Each season has a YAML file in `seasons_config/`. Required fields at the top level:
+Each season has a YAML file in `utig/seasons_config/`. Required fields at the top level:
 
 ```yaml
 season_name: "2015_Antarctica_BaslerJKB"
@@ -44,7 +46,7 @@ params:
 Indexes raw data, matches it with post-processed GPS files, assigns segments, and outputs CSV files for the parameter spreadsheet.
 
 ```bash
-uv run scripts/define_segments.py seasons_config/2015_Antarctica_BaslerJKB.yaml
+uv run utig/scripts/define_segments.py utig/seasons_config/2015_Antarctica_BaslerJKB.yaml
 ```
 
 **What it does:**
@@ -84,7 +86,7 @@ Also updated/created:
 Reads the xlsx parameter spreadsheet and generates GPS support `.mat` files.
 
 ```bash
-uv run scripts/create_gps_support.py path/to/season_params.xlsx [--overwrite]
+uv run utig/scripts/create_gps_support.py path/to/season_params.xlsx [--overwrite]
 ```
 
 **What it does:**
@@ -107,7 +109,7 @@ uv run scripts/create_gps_support.py path/to/season_params.xlsx [--overwrite]
 Reads the xlsx parameter spreadsheet and generates temporary header `.mat` files for MATLAB `records_create`.
 
 ```bash
-uv run scripts/create_headers.py path/to/season_params.xlsx [--overwrite]
+uv run utig/scripts/create_headers.py path/to/season_params.xlsx [--overwrite]
 ```
 
 **What it does:**

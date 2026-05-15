@@ -1,8 +1,12 @@
-"""Utilities for reading and writing OPR parameter spreadsheets."""
+"""OPR parameter spreadsheet I/O and season-defaults YAML loader."""
 
 import re
+import warnings
 from pathlib import Path
+from typing import Dict, Union
+
 import pandas as pd
+import yaml
 
 
 def _parse_opr_sheet(df: pd.DataFrame) -> pd.DataFrame:
@@ -13,11 +17,10 @@ def _parse_opr_sheet(df: pd.DataFrame) -> pd.DataFrame:
         names (Date, Segment, frms, ...), row 4 is type codes, data starts at row 5.
       - Other sheets: row 0 is column names, row 1 is type codes, data starts at row 2.
 
-    We detect which format by checking if the first cell contains 'Version' or 'Radar'.
+    We detect which format by checking whether the first cell contains 'Version'/'Radar'.
     """
     raw = df.copy()
 
-    # Detect cmd-style metadata header (Version/Radar/Season rows before column names)
     first_col_vals = raw.iloc[:, 0].astype(str).tolist()
     metadata_rows = 0
     for val in first_col_vals:
@@ -26,47 +29,34 @@ def _parse_opr_sheet(df: pd.DataFrame) -> pd.DataFrame:
         else:
             break
 
-    # Row after metadata is column names, then type codes, then data
     header_row = metadata_rows
-    type_row = metadata_rows + 1
     data_start = metadata_rows + 2
 
     if data_start > len(raw):
         return pd.DataFrame()
 
-    # Extract column names from the header row
     col_names = raw.iloc[header_row].tolist()
-    # Clean up: replace NaN with generated names
-    col_names = [
-        str(c) if pd.notna(c) else f"_col{i}" for i, c in enumerate(col_names)
-    ]
-    # Rename the first two columns to standard names
+    col_names = [str(c) if pd.notna(c) else f"_col{i}" for i, c in enumerate(col_names)]
     if len(col_names) >= 2:
         col_names[0] = "day_seg_date"
         col_names[1] = "day_seg_num"
 
-    # Extract data rows
     result = raw.iloc[data_start:].copy()
     result.columns = col_names[: len(result.columns)]
     result = result.reset_index(drop=True)
-
     return result
 
 
-def read_xlsx(path: Path) -> dict[str, pd.DataFrame]:
-    """Read OPR xlsx parameter spreadsheet, return {sheet_name: DataFrame}.
-
-    Handles the OPR header format (metadata rows, column names, type codes).
-    """
+def read_xlsx(path: Path) -> Dict[str, pd.DataFrame]:
+    """Read an OPR xlsx parameter spreadsheet. Returns {sheet_name: DataFrame}."""
     path = Path(path)
     raw_sheets = pd.read_excel(path, sheet_name=None, engine="openpyxl", header=None)
     return {name: _parse_opr_sheet(df) for name, df in raw_sheets.items()}
 
 
-def read_csvs(directory: Path) -> dict[str, pd.DataFrame]:
-    """Read directory of CSVs (one per tab), return {tab_name: DataFrame}.
+def read_csvs(directory: Path) -> Dict[str, pd.DataFrame]:
+    """Read a directory of per-sheet CSVs (as written by the ingest pipeline).
 
-    Tab name is derived from filename (e.g., 'cmd.csv' -> 'cmd').
     These CSVs use the simple format from define_segments.py (no OPR metadata rows).
     """
     directory = Path(directory)
@@ -74,7 +64,6 @@ def read_csvs(directory: Path) -> dict[str, pd.DataFrame]:
     for csv_file in sorted(directory.glob("*.csv")):
         tab_name = csv_file.stem
         df = pd.read_csv(csv_file)
-        # Rename first two columns to match xlsx convention
         cols = list(df.columns)
         if len(cols) >= 2:
             rename = {cols[0]: "day_seg_date", cols[1]: "day_seg_num"}
@@ -84,21 +73,16 @@ def read_csvs(directory: Path) -> dict[str, pd.DataFrame]:
 
 
 def parse_matlab_cell_string(s: str) -> list[str]:
-    """Parse MATLAB cell string like "{'a', 'b'}" -> ['a', 'b'].
-
-    Handles single-element, empty, and bare string cases.
-    """
+    """Parse a MATLAB cell-string like "{'a', 'b'}" into ['a', 'b']."""
     if not isinstance(s, str):
         return []
     s = s.strip()
     if not s:
         return []
-    # Remove outer braces if present
     if s.startswith("{") and s.endswith("}"):
         s = s[1:-1].strip()
     if not s:
         return []
-    # Split on commas, strip quotes and whitespace
     parts = re.split(r",\s*", s)
     result = []
     for part in parts:
@@ -108,8 +92,8 @@ def parse_matlab_cell_string(s: str) -> list[str]:
     return result
 
 
-def segments_to_process(sheets: dict[str, pd.DataFrame]) -> pd.Index:
-    """Return index of segments not marked 'do not process' in cmd tab."""
+def segments_to_process(sheets: Dict[str, pd.DataFrame]) -> pd.Index:
+    """Return the index of segments in the cmd tab not marked 'do not process'."""
     if "cmd" not in sheets:
         raise ValueError("No 'cmd' sheet found in spreadsheet")
     cmd = sheets["cmd"]
@@ -117,3 +101,14 @@ def segments_to_process(sheets: dict[str, pd.DataFrame]) -> pd.Index:
         return cmd.index
     mask = ~cmd["notes"].astype(str).str.contains("do not process", case=False, na=False)
     return cmd.index[mask]
+
+
+def load_defaults(yaml_file: Union[str, Path]) -> Dict:
+    """Load season-default parameters from a YAML file."""
+    yaml_path = Path(yaml_file)
+    if not yaml_path.exists():
+        warnings.warn(f"Defaults file not found: {yaml_path}")
+        return {}
+    with open(yaml_path, 'r') as f:
+        defaults = yaml.safe_load(f)
+    return defaults if defaults else {}

@@ -1,7 +1,7 @@
 """Stage 1: Define segments from post-processed GPS + raw radar data.
 
-Usage:
-    uv run scripts/define_segments.py seasons_config/2015_Antarctica_BaslerJKB.yaml
+Usage (from repo root):
+    uv run utig/scripts/define_segments.py utig/seasons_config/2015_Antarctica_BaslerJKB.yaml
 """
 
 import sys
@@ -12,8 +12,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from utig_radar_loading import file_util, segment_splits, opr_gps_file_generation
-from utig_radar_loading.preprocessing import load_defaults
+from opr_ingest.utig import file_index, segment_splits, transects
 
 
 def load_configs(season_config_path: str):
@@ -21,7 +20,8 @@ def load_configs(season_config_path: str):
     with open(season_config_path) as f:
         season_config = yaml.safe_load(f)
 
-    user_config_path = Path(season_config_path).parent.parent / "user_config.yaml"
+    # user_config.yaml lives at the repo root (shared across radar-system pipelines)
+    user_config_path = Path("user_config.yaml")
     with open(user_config_path) as f:
         user_config = yaml.safe_load(f)
 
@@ -47,18 +47,18 @@ def enumerate_postprocessed_gps(gps_dir: str) -> pd.DataFrame:
 
 def build_transect_index(user_config: dict, datasets: list[str]):
     """Load file index and build transect DataFrame."""
-    df_files = file_util.load_file_index_df(
+    df_files = file_index.load_file_index_df(
         user_config["raw_data_base_path"],
         user_config["file_index_cache"],
         read_cache=True,
     )
-    df_artifacts = file_util.create_artifacts_df(df_files, datasets=datasets)
+    df_artifacts = file_index.create_artifacts_df(df_files, datasets=datasets)
 
     usable_artifact_types = {
         "gps": {"stream_types": ["GPSnc1", "GPStp2", "GPSap3", "GPSkc1"], "file_names": ["xds.gz"]},
         "radar": {"stream_types": ["RADnh5", "RADnh3", "RADnh2", "RADnh4", "RADjh1"], "file_names": ["bxds", "bxds1"]},
     }
-    df_transects = file_util.arrange_by_transect(df_artifacts, usable_artifact_types)
+    df_transects = file_index.arrange_by_transect(df_artifacts, usable_artifact_types)
     return df_transects
 
 
@@ -96,7 +96,7 @@ def filter_season(df_transects: pd.DataFrame):
     Returns (df_season, df_missing_radar, df_missing_gps).
     """
     # Update start timestamps using post-processed GPS where available
-    df_transects["start_timestamp"] = df_transects.apply(file_util.get_start_timestamp, axis=1)
+    df_transects["start_timestamp"] = df_transects.apply(transects.get_start_timestamp, axis=1)
 
     # Filter out timing-only GPS without post-processed data
     timing_only = (df_transects["gps_stream_type"] == "GPSkc1") & df_transects["postprocessed_gps_path"].isna()
@@ -141,8 +141,7 @@ def filter_season(df_transects: pd.DataFrame):
 def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dict):
     """Generate parameter spreadsheet CSVs from the segment-assigned season DataFrame."""
     season_name = season_config["season_name"]
-    season_config_path = f"seasons_config/{season_name}.yaml"
-    defaults = load_defaults(season_config_path)
+    defaults = season_config
 
     base_params_dir = Path(user_config["params_output_base_dir"]) / season_name
     base_params_dir.mkdir(parents=True, exist_ok=True)
@@ -237,7 +236,7 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
 def generate_map(df_season, df_missing_radar, df_missing_gps, season_name, output_dir):
     """Generate an interactive HTML map of segments."""
     import holoviews as hv
-    from utig_radar_loading import geo_util, stream_util
+    from opr_ingest.core import basemap, geo
 
     hv.extension("bokeh")
 
@@ -246,11 +245,11 @@ def generate_map(df_season, df_missing_radar, df_missing_gps, season_name, outpu
     def try_add_path(df, source_type, color, width, label):
         try:
             if source_type is None:
-                dfs = geo_util.load_gps_data(df)
+                dfs = transects.load_gps_data(df)
             else:
-                dfs = geo_util.load_gps_data(df, source_type=source_type)
+                dfs = transects.load_gps_data(df, source_type=source_type)
             if dfs:
-                _, p = geo_util.create_path(dfs)
+                _, p = geo.create_path(dfs)
                 paths.append(p.opts(color=color, line_width=width).relabel(label))
         except Exception as e:
             print(f"[WARNING] Could not create map layer '{label}': {e}")
@@ -265,8 +264,8 @@ def generate_map(df_season, df_missing_radar, df_missing_gps, season_name, outpu
     # Matched segments (blue)
     try_add_path(df_season, "postprocessed", "blue", 1, "Radar + Post-processed GPS Data")
 
-    basemap = stream_util.create_antarctica_basemap()
-    plot = basemap * hv.Overlay(paths)
+    basemap_plot = basemap.create_antarctica_basemap()
+    plot = basemap_plot * hv.Overlay(paths)
     plot = plot.opts(aspect="equal", frame_width=800, frame_height=800, tools=["hover"])
     plot = plot.opts(title=season_name, legend_position="right")
 

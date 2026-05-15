@@ -1,7 +1,7 @@
 """Stage 2: Create GPS support files from parameter spreadsheet.
 
-Usage:
-    uv run scripts/create_gps_support.py path/to/season_params.xlsx [--overwrite]
+Usage (from repo root):
+    uv run utig/scripts/create_gps_support.py path/to/season_params.xlsx [--overwrite]
 """
 
 import argparse
@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from utig_radar_loading import opr_gps_file_generation, param_spreadsheet
+from opr_ingest.core import params
+from opr_ingest.utig import gps_pipeline
 
 
 def seg_label(row):
@@ -24,11 +25,11 @@ def main():
 
     spreadsheet_path = Path(args.spreadsheet)
     if spreadsheet_path.suffix == ".xlsx":
-        sheets = param_spreadsheet.read_xlsx(spreadsheet_path)
+        sheets = params.read_xlsx(spreadsheet_path)
     else:
-        sheets = param_spreadsheet.read_csvs(spreadsheet_path)
+        sheets = params.read_csvs(spreadsheet_path)
 
-    processable = param_spreadsheet.segments_to_process(sheets)
+    processable = params.segments_to_process(sheets)
     records = sheets["records"]
     print(f"Found {len(processable)} segments to process (out of {len(records)})")
 
@@ -54,11 +55,11 @@ def main():
 
         # Parse field GPS paths
         field_gps_str = row.get("gps.field_fn", "")
-        field_gps_paths = param_spreadsheet.parse_matlab_cell_string(str(field_gps_str)) if pd.notna(field_gps_str) else []
+        field_gps_paths = params.parse_matlab_cell_string(str(field_gps_str)) if pd.notna(field_gps_str) else []
 
         # Parse post-processed GPS paths
         postproc_str = row.get("gps.postprocessed_fn", "")
-        postproc_paths = param_spreadsheet.parse_matlab_cell_string(str(postproc_str)) if pd.notna(postproc_str) else []
+        postproc_paths = params.parse_matlab_cell_string(str(postproc_str)) if pd.notna(postproc_str) else []
 
         if not field_gps_paths:
             print(f"[SKIP] {label}: no field GPS paths")
@@ -67,7 +68,7 @@ def main():
 
         print(f"\nProcessing {label}")
         try:
-            opr_gps_file_generation.generate_gps_file(
+            gps_pipeline.generate_gps_file(
                 gps_paths=field_gps_paths,
                 output_path=output_path,
                 postprocessed_gps_paths=postproc_paths if postproc_paths else None,

@@ -1,59 +1,34 @@
-import pyproj
-from shapely import LineString
+"""Geographic projection, distance, and HoloViews path helpers."""
+
 import numpy as np
 import pandas as pd
+import pyproj
+from shapely import LineString
 import holoviews as hv
-from utig_radar_loading import stream_util, opr_gps_file_generation
 
-def load_gps_data(transects_df, source_type=None):
-    segment_dfs = []
 
-    for idx, row in transects_df.iterrows():
+def calculate_track_distance_km(df, lat_col='LAT', lon_col='LON'):
+    """Total length of a track in km, projecting to EPSG:3031."""
+    if lat_col not in df.columns or lon_col not in df.columns:
+        raise ValueError(f"Columns '{lat_col}' and/or '{lon_col}' not found in DataFrame")
 
-        if source_type is None:
-            if pd.notna(row['postprocessed_gps_path']):
-                tmp_source_type = 'postprocessed'
-            else:
-                tmp_source_type = 'field'
-        else:
-            tmp_source_type = source_type
+    valid = df.dropna(subset=[lat_col, lon_col])
+    if len(valid) < 2:
+        return 0.0
 
-        if tmp_source_type == 'field':
-            f = row['gps_path']
-            
-            df = stream_util.load_xds_stream_file(f, parse=True)
-        elif tmp_source_type == 'postprocessed':
-            f = row['postprocessed_gps_path']
-            df = opr_gps_file_generation.load_and_parse_postprocessed_gps_file(f)
-            df['prj'] = idx[0]
-            df['set'] = idx[1]
-            df['trn'] = idx[2]
-        else:
-            raise ValueError(f"Unknown source_type {tmp_source_type}")
+    transformer = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:3031", always_xy=True)
+    x, y = transformer.transform(valid[lon_col].values, valid[lat_col].values)
+    dx = np.diff(x)
+    dy = np.diff(y)
+    return np.sum(np.sqrt(dx**2 + dy**2)) / 1000.0
 
-        #line_length_km = stream_util.calculate_track_distance_km(df)
-        #_, _, line_length_m_shapely = project_split_and_simplify(df['LON'].values, df['LAT'].values, calc_length=True, simplify_tolerance=100)
-
-        necessary_keys = ['prj', 'set', 'trn', 'clk_y', 'LAT', 'LON', 'TIMESTAMP']
-        for k in necessary_keys:
-            if k not in df:
-                df[k] = np.nan
-
-        df_sub = df[['prj', 'set', 'trn', 'clk_y', 'LAT', 'LON', 'TIMESTAMP']]
-
-        if 'segment_path' in row:
-            df_sub['segment_path'] = row['segment_path']
-
-        segment_dfs.append(df_sub)
-    return segment_dfs
 
 def project_split_and_simplify(lon, lat, projection='EPSG:3031', simplify_tolerance=1000,
-                                split_dist=2000, calc_length=False):
-    # Project
+                               split_dist=2000, calc_length=False):
+    """Project lon/lat to `projection`, split at gaps >= split_dist meters, simplify."""
     transformer = pyproj.Transformer.from_crs('EPSG:4326', projection, always_xy=True)
     x_proj, y_proj = transformer.transform(lon, lat)
 
-    # Break into separate segments
     dist_deltas = np.sqrt(np.diff(x_proj)**2 + np.diff(y_proj)**2)
     segment_indices = np.array(np.where(dist_deltas > split_dist)) + 1
     segment_indices = np.insert(segment_indices, 0, 0)
@@ -61,25 +36,20 @@ def project_split_and_simplify(lon, lat, projection='EPSG:3031', simplify_tolera
 
     x_simplified = []
     y_simplified = []
-
     length = 0
 
     for start_idx, end_idx in zip(segment_indices[:-1], segment_indices[1:]):
         if end_idx - start_idx < 5:
             continue
-
         x_segment = x_proj[start_idx:end_idx]
         y_segment = y_proj[start_idx:end_idx]
-
         if np.isnan(x_segment).any() or np.isnan(y_segment).any():
             print(f"Warning: NaN values found in segment {start_idx}:{end_idx}")
             continue
 
-        # Use shapely to simplify paths to 1km tolerance
         line = LineString(zip(x_segment, y_segment))
         if calc_length:
             length += line.length
-        
         if simplify_tolerance:
             line = line.simplify(tolerance=simplify_tolerance)
         coords = list(line.coords)
@@ -91,16 +61,20 @@ def project_split_and_simplify(lon, lat, projection='EPSG:3031', simplify_tolera
 
     if calc_length:
         return x_simplified, y_simplified, length
-    else:
-        return x_simplified, y_simplified
+    return x_simplified, y_simplified
+
 
 def create_path(segment_dfs, path_opts_kwargs={}):
+    """Build a HoloViews `Path` from a list of per-segment GPS DataFrames.
+
+    Each input df must have `prj`, `set`, `trn`, `LAT`, `LON`. Optional fields
+    `segment_path`, `radar_stream_type` are propagated as path attributes.
+    """
     dfs = []
 
     for idx, df_sub in enumerate(segment_dfs):
         df_tmp = df_sub.copy()
         df_tmp = df_tmp[df_tmp['LAT'] <= -50]
-
         if len(df_tmp) < 3:
             continue
 
@@ -108,18 +82,12 @@ def create_path(segment_dfs, path_opts_kwargs={}):
             x_proj, y_proj = project_split_and_simplify(df_tmp['LON'].values, df_tmp['LAT'].values)
         except Exception as e:
             print(f"Error processing segment {idx}: {e}")
-            #print(df_tmp)
             continue
 
-        # Finish with a nan to divide from next
         x_proj.append(np.nan)
         y_proj.append(np.nan)
 
-        # Add projected coordinates to dataframe
-        df_simplified = pd.DataFrame({
-            'x': x_proj,
-            'y': y_proj
-        })
+        df_simplified = pd.DataFrame({'x': x_proj, 'y': y_proj})
 
         required_fields = ['prj', 'set', 'trn']
         optional_fields = ['segment_path', 'radar_stream_type']
@@ -136,14 +104,10 @@ def create_path(segment_dfs, path_opts_kwargs={}):
         dfs.append(df_simplified)
 
     df_combined = pd.concat(dfs, ignore_index=True)
-    # Create hv.Path with already projected coordinates
-    path = hv.Path(df_combined,
-                ['x', 'y'],
-                display_fields,
-                ).opts(
-                    tools=['hover'],
-                    line_width=0.5,
-                    show_legend=True,
-                    **path_opts_kwargs
-                )
+    path = hv.Path(df_combined, ['x', 'y'], display_fields).opts(
+        tools=['hover'],
+        line_width=0.5,
+        show_legend=True,
+        **path_opts_kwargs,
+    )
     return dfs, path

@@ -1,24 +1,30 @@
+"""Segment-assignment for UTIG transects.
+
+Uses gaps in a CT timestamp field (default: `tim`, the radar clock) to detect
+segment boundaries and assign a `<YYYYMMDD>_NN` segment label to each row.
+"""
+
 import numpy as np
-import pandas as pd
 from tqdm import tqdm
 
-from utig_radar_loading import stream_util
-from utig_radar_loading.geo_util import project_split_and_simplify
+from opr_ingest.utig import stream_util
+
 
 def assign_segments(df_season, timestamp_field='tim', timestamp_split_threshold=1000, parse_ct=False, progress=False):
-    """
-    Assigns segment paths to each row in df_season based on gaps in the specified timestamp field.
-    Parameters:
-    - df_season: DataFrame containing the season data with radar paths.
-    - timestamp_field: The field in the CT files to use for detecting gaps (default is 'tim').
-    - timestamp_split_threshold: The threshold for splitting segments based on the timestamp difference (default is 1000).
-    - parse_ct: Whether to parse the CT files (default is False).
-    Returns:
-    - df_season with additional columns: 'segment_path', 'segment_date_str', 'segment_number'.
-    """
+    """Assign segment paths to each row of `df_season` based on gaps in the CT timestamp field.
 
+    Parameters
+    ----------
+    df_season : DataFrame with `start_timestamp` and `radar_path` columns
+    timestamp_field : CT column to inspect for gaps (default `tim`)
+    timestamp_split_threshold : gap (in `tim` units) that triggers a new segment
+    parse_ct : pass through to load_ct_file
+    progress : show tqdm
+
+    Returns df with added `segment_path`, `segment_date_str`, `segment_number`.
+    """
     df_season = df_season.sort_values(by='start_timestamp')
-    
+
     last_segment_ct = stream_util.load_ct_file(df_season.iloc[0]['radar_path'], parse=parse_ct)
 
     df_season['segment_path'] = ""
@@ -48,7 +54,6 @@ def assign_segments(df_season, timestamp_field='tim', timestamp_split_threshold=
                 if new_datestring == current_segment_datestring:
                     current_segment_idx += 1
                 else:
-                    current_frame_idx = 1
                     current_segment_idx = 1
                     current_segment_datestring = new_datestring
 
@@ -63,5 +68,5 @@ def assign_segments(df_season, timestamp_field='tim', timestamp_split_threshold=
             print(f"Could not load index {row_iloc}")
             print(df_season.iloc[row_iloc]['radar_path'])
             print(e)
-    
+
     return df_season
