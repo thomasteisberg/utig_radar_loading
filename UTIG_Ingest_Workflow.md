@@ -131,29 +131,59 @@ uv run utig/scripts/create_headers.py path/to/season_params.xlsx [--overwrite]
 
 ## MATLAB Radar Processing
 
-After the Python preprocessing stages, continue with MATLAB-based radar processing. See [UTIG_Ingest_Workflow_original.md](UTIG_Ingest_Workflow_original.md) for the full MATLAB workflow, starting from the "Update lever_arm.m" section.
+After the Python preprocessing stages, continue with MATLAB-based radar processing.
 
-The recommended MATLAB processing order:
+## Update lever_arm.m
+
+Update `lever_arm.m` with the GPS, IMU, and radar locations.
+
+## Run the processing
+
+There are UTIG-specific run scripts in `/kucresis/scratch/tteisberg_sta/scripts/run_opr/rds/UTIG`
+
+Each run script mentioned below has a `year = XXXX` and a series of if-else statements for each year. You'll need to add a new `elseif` to each file, such as the following:
+
+```
+elseif year == 2016
+  params = read_param_xls(opr_filename_param('rds_param_2016_Antarctica_BaslerJKB.xlsx'));
+  params = opr_set_params(params,'cmd.records',1);
+  params = opr_set_params(params,'cmd.records',0,'cmd.notes','do not process');
+```
+
+In most cases, the recommendation is to set the script to run everything everything not marked with a "do not process" note, but you can set individual segments as well.
+
+The recommended workflow is as follows:
+
 1. `run_records_create_UTIG.m`
 2. `run_analysis_UTIG.m`
 3. `run_collate_coh_noise_UTIG.m`
 4. `run_qlook_UTIG.m`
 5. `run_all_create_track_files.m`
 6. `run_layer_tracker_UTIG.m`
-7. `run_check_surface.m`
-8. `run_img_combine_update_UTIG.m`
-9. `run_sar_UTIG.m`
-10. `run_array_UTIG.m`
-11. `run_post_UTIG.m`
 
-## Troubleshooting
+For the layer tracker, run it using snake processing on the surface. Optionally (but highly recommended), run it a second time to copy the surface DEM for reference.
 
-**"No matching radar data for GPS file X"**: The GPS file's project/transect doesn't match any indexed radar data. Check that the correct `datasets` are listed in the season config and that the raw data exists.
+At this stage, you should manually inspect some data using `imb.picker` and make sure it's looking reasonable.
 
-**GPS time range errors**: Post-processed GPS and field GPS time ranges don't overlap. This usually means the GPS file is for a different transect than expected. Check filename parsing.
+6. `run_check_surface.m`
 
-**Missing post-processed GPS**: Some transects may legitimately lack post-processed positioning (e.g., test flights, non-science segments). Mark these as "do not process" or verify field GPS is sufficient.
+Run check surface on a handful of segments. If needed, update Tadc_adjust following the instructions in `check_surface.m`. Get this part right before proceeding.
 
-**Header generation failures**: Usually caused by corrupted or truncated radar files. Check the raw data file integrity. Mark problematic segments as "do not process" if unfixable.
+Manually review all of the surface picks and fix any you find that are incorrect. After fixing surface picks, you'll need to re-combine the images:
 
-**Dask worker errors**: If header generation hangs or crashes, try reducing `dask_workers` in `user_config.yaml`.
+6. `run_img_combine_update_UTIG.m`
+
+You're now ready for SAR processing and generating the CSARP_standard product:
+
+7. `run_sar_UTIG.m`
+8. `run_array_UTIG.m`
+
+Manually review data again to check that everything so far has worked.
+
+9. `run_post_UTIG.m`
+
+Download the `CSARP_post` directory and review the PDFs.
+
+Then copy `CSARP_qlook` and `CSARP_standard` into `CSARP_post`. Move `CSARP_post` to the public data directory and symlink it from the working directory.
+
+That's it!
