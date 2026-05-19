@@ -1,0 +1,41 @@
+season_name: "YYYY_Antarctica_ORCA"  # TODO: fill in real season name
+datasets: ["ORCA"]                    # TODO: confirm dataset label(s)
+
+# Defaults for generating parameter spreadsheet tabs.
+# Skeleton mirroring utig/seasons_config/2015_Antarctica_BaslerJKB.yaml — values
+# below are placeholders. Fill in once ORCA's radar/system parameters are known.
+params:
+  cmd:
+    frms: ~
+    records: 1
+    qlook: 1
+    sar: ~
+    array: ~
+    generic: ~
+    mission_names: ""
+    notes: ""
+
+  records:
+    # TODO: confirm ORCA file.version once OPR support is in place
+    file.version: ~
+    file.boards: "{''}"
+    file.start_idx: 1
+    file.stop_idx: 1
+    file.start_record: ~
+    file.stop_record: ~
+    file.base_dir: ~              # filled by ORCA define_segments
+    file.board_folder_name: ~     # filled by ORCA define_segments
+    file.prefix: ~                # TODO: ORCA prefix convention (YYYYMMDD_HHMMSS)
+    file.clk: ~                   # TODO: ORCA radar clock rate
+    frames.geotiff_fn: "antarctica/Landsat-7/Antarctica_LIMA.tif"
+    frames.mode: 1
+    gps.time_offset: 0
+    gps.en: 1
+    gps.fn: ~                     # filled by ORCA define_segments
+
+  qlook: {}     # TODO: copy/tune from UTIG once ORCA radar params are known
+  sar: {}       # TODO
+  array: {}     # TODO
+  radar: {}     # TODO: ORCA-specific radar parameters (fs, prf, f0, f1, Tpd, ...)
+  post: {}      # TODO
+  analysis_noise: {}  # TODO
