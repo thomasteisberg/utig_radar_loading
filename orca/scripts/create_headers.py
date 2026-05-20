@@ -11,7 +11,7 @@ import hdf5storage
 import pandas as pd
 import yaml
 
-from opr_ingest.core import opr_headers, params
+from opr_ingest.core import params
 from opr_ingest.orca import headers as orca_headers
 
 
@@ -47,21 +47,50 @@ def get_season_name(sheets: dict) -> str:
 
 
 def collect_radar_files(sheets: dict, processable, user_config: dict):
-    """Collect ORCA recordings to process and their destination header paths."""
+    """Collect ORCA recordings to process and their destination header paths.
+
+    For each processable row in `records`, expand `file.board_folder_name` (a
+    MATLAB cell-string of timestamp prefixes) into one (rx_samps_path,
+    header_mat_path) pair per prefix.
+
+    ORCA recordings live as flat files directly under `file.base_dir`:
+        <base_dir>/<prefix><file.prefix>      (e.g. .../20251204_224207_rx_samps.bin)
+    Note there is no per-prefix subdirectory — `<prefix>` and `<file.prefix>`
+    concatenate to form a single filename. Header outputs mirror the OPR
+    convention (`<board_folder_name>/<stem>.mat`):
+        <header_base_dir>/<season>/<prefix>/<prefix><file.prefix>.mat
+    """
     records = sheets["records"]
     season_name = get_season_name(sheets)
-    header_base_dir = str(Path(user_config["header_base_dir"]) / season_name)
+    header_base_dir = Path(user_config["header_base_dir"]) / season_name
     print(f"Header output dir: {header_base_dir}")
 
-    # TODO: confirm how ORCA recordings are laid out in the records sheet.
-    # The UTIG pipeline uses file.base_dir + file.board_folder_name + file.prefix;
-    # for ORCA we likely want each prefix's full <prefix>_rx_samps.bin path.
-    raise NotImplementedError(
-        "ORCA create_headers.collect_radar_files: walk records.{base_dir, "
-        "board_folder_name, prefix} to enumerate <prefix>_rx_samps.bin files "
-        "and compute their output header .mat paths via "
-        "opr_headers.get_header_file_location. See utig/scripts/create_headers.py."
-    )
+    radar_paths = []
+    header_locations = []
+
+    for seg_idx in processable:
+        row = records.loc[seg_idx]
+        base_dir = row.get("file.base_dir", "")
+        board_folder_str = row.get("file.board_folder_name", "")
+        file_prefix = row.get("file.prefix", "_rx_samps.bin")
+
+        if pd.isna(base_dir) or pd.isna(board_folder_str):
+            continue
+        if pd.isna(file_prefix):
+            file_prefix = "_rx_samps.bin"
+
+        folder_names = params.parse_matlab_cell_string(str(board_folder_str))
+
+        for folder_name in folder_names:
+            rx_path = Path(base_dir) / f"{folder_name}{file_prefix}"
+            if not rx_path.exists():
+                print(f"[WARNING] Radar file not found: {rx_path}")
+                continue
+            header_fn = header_base_dir / folder_name / f"{rx_path.stem}.mat"
+            radar_paths.append(str(rx_path))
+            header_locations.append(str(header_fn))
+
+    return radar_paths, header_locations
 
 
 def main():
