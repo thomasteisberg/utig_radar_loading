@@ -11,7 +11,7 @@ file_index_cache: "outputs/file_index.csv"
 orca_file_index_cache: "outputs/orca_file_index.csv"
 
 # Base directories for outputs (season name is appended automatically)
-gps_support_base_dir: "/resfs/GROUPS/CRESIS/dataproducts/opr_support/gps"
+gps_support_base_dir: "outputs/gps"
 header_base_dir: "/kucresis/scratch/tteisberg_sta/scripts/opr_user_tmp/headers/rds"
 params_output_base_dir: "outputs/params"
 maps_output_base_dir: "outputs/maps"

@@ -36,28 +36,136 @@ def build_recording_index(user_config: dict) -> pd.DataFrame:
 
 
 def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dict):
-    """Generate parameter spreadsheet CSVs from the segment-assigned recordings DataFrame."""
-    # TODO: adapt utig/scripts/define_segments.py:generate_csvs to ORCA. Key
-    # differences: file.board_folder_name is built from ORCA prefix folders,
-    # gps.field_fn lists <prefix>_gpspipe_stdout.log paths, gps.postprocessed_fn
-    # is dropped (no separate post-processed GPS source for ORCA).
-    raise NotImplementedError(
-        "ORCA define_segments.generate_csvs: build cmd/records/qlook/sar/array/"
-        "radar/post/analysis_noise CSVs under <params_output_base_dir>/<season>/"
-        " using the same schema as utig/scripts/define_segments.py:generate_csvs."
+    """Generate parameter spreadsheet CSVs from the segment-assigned recordings DataFrame.
+
+    Mirrors `utig/scripts/define_segments.py:generate_csvs` against the UTIG schema
+    (file.version 425 doubles as the ORCA schema for now). ORCA-specific overrides:
+
+      * `file.base_dir` → user_config["orca_raw_data_base_path"]
+      * `file.board_folder_name` → cell-string list of one element per segment, the
+        recording prefix (so `base_dir + board_folder_name + file.prefix` resolves
+        to `<base_dir>/<prefix>_rx_samps.bin` with `file.prefix: "_rx_samps.bin"`
+        set in the season yaml).
+      * `gps.fn` → `<gps_support_base_dir>/<season>/gps_<segment_path>.mat`
+      * `gps.field_fn` → cell-string list of gpspipe log paths
+      * No `gps.postprocessed_fn` (ORCA has no separate post-processed GPS).
+    """
+    season_name = season_config["season_name"]
+    defaults = season_config
+
+    base_params_dir = Path(user_config["params_output_base_dir"]) / season_name
+    base_params_dir.mkdir(parents=True, exist_ok=True)
+
+    gps_support_base_dir = user_config["gps_support_base_dir"]
+    orca_raw_data_base_path = user_config["orca_raw_data_base_path"]
+
+    def make_parameter_sheet(default_values, segments, overrides=None):
+        df = pd.DataFrame(default_values, index=segments)
+        if overrides:
+            for key, value in overrides.items():
+                df[key] = value
+        return df
+
+    grouped = df_season.groupby(["segment_date_str", "segment_number"])
+    segments = grouped.first().index
+
+    def board_folder_per_segment(x):
+        prefixes = list(x.sort_values("start_timestamp").index)
+        return "{'" + "', '".join(prefixes) + "'}"
+
+    def field_gps_per_segment(x):
+        paths = x.sort_values("start_timestamp")["gps_path"].dropna().unique().tolist()
+        if not paths:
+            return ""
+        return "{'" + "', '".join(str(p) for p in paths) + "'}"
+
+    def notes_per_segment(x):
+        return list(x.sort_values("start_timestamp").index)
+
+    board_folder_name = grouped.apply(board_folder_per_segment, include_groups=False)
+    field_gps = grouped.apply(field_gps_per_segment, include_groups=False)
+    notes = grouped.apply(notes_per_segment, include_groups=False)
+
+    gps_fn = pd.Series(
+        [
+            f"{gps_support_base_dir}/{season_name}/gps_{date_str}_{seg_num:02d}.mat"
+            for (date_str, seg_num) in segments
+        ],
+        index=segments,
     )
+
+    mission_names = pd.Series([["ORCA"]] * len(segments), index=segments)
+
+    make_parameter_sheet(defaults["params"]["cmd"], segments, overrides={
+        "mission_names": mission_names,
+        "notes": notes,
+    }).to_csv(base_params_dir / "cmd.csv")
+
+    make_parameter_sheet(defaults["params"]["records"], segments, overrides={
+        "file.base_dir": orca_raw_data_base_path,
+        "file.board_folder_name": board_folder_name,
+        "gps.fn": gps_fn,
+        "gps.field_fn": field_gps,
+    }).to_csv(base_params_dir / "records.csv")
+
+    sheets_with_defaults_only = ["qlook", "sar", "array", "radar", "post", "analysis_noise"]
+    for sheet_name in sheets_with_defaults_only:
+        sheet_defaults = defaults["params"].get(sheet_name) or {}
+        if sheet_defaults:
+            make_parameter_sheet(sheet_defaults, segments).to_csv(
+                base_params_dir / f"{sheet_name}.csv"
+            )
+
+    print(f"\nCSV files written to {base_params_dir}/")
 
 
 def generate_map(df_season, season_name, output_dir):
-    """Generate an interactive HTML map of segments."""
-    # TODO: mirror utig/scripts/define_segments.py:generate_map. Needs a per-
-    # transect GPS loader that returns LAT/LON/TIMESTAMP for ORCA recordings
-    # (likely a thin wrapper around load_and_parse_gpspipe_file).
-    raise NotImplementedError(
-        "ORCA define_segments.generate_map: render an Antarctica/Arctic basemap "
-        "with each segment's track. Reuses opr_ingest.core.basemap and "
-        "opr_ingest.core.geo.create_path."
-    )
+    """Render an interactive HTML map of ORCA segments over the Antarctica basemap."""
+    import holoviews as hv
+
+    from opr_ingest.core import basemap, geo
+    from opr_ingest.orca.gpspipe_gps import load_and_parse_gpspipe_file
+
+    hv.extension("bokeh")
+
+    segment_dfs = []
+    for prefix, row in df_season.iterrows():
+        try:
+            gps = load_and_parse_gpspipe_file(row["gps_path"])
+        except Exception as e:
+            print(f"[WARNING] Failed to load gpspipe for {prefix}: {e}")
+            continue
+        if gps.empty:
+            print(f"[WARNING] No usable TPV records in {row['gps_path']}; skipping {prefix}")
+            continue
+        segment_dfs.append(pd.DataFrame({
+            "LAT": gps["LAT"].values,
+            "LON": gps["LON"].values,
+            # Fake prj/set/trn so the instrument-agnostic core.geo.create_path
+            # contract is satisfied; these surface as hover tooltips on the map.
+            "prj": "ORCA",
+            "set": row["segment_date_str"],
+            "trn": prefix,
+            "segment_path": row["segment_path"],
+        }))
+
+    if not segment_dfs:
+        print("[WARNING] No segments with usable GPS data; skipping map generation")
+        return
+
+    _, path = geo.create_path(segment_dfs)
+    path = path.opts(color="blue", line_width=1).relabel("ORCA Recordings")
+
+    basemap_plot = basemap.create_antarctica_basemap()
+    plot = basemap_plot * hv.Overlay([path])
+    plot = plot.opts(aspect="equal", frame_width=800, frame_height=800, tools=["hover"])
+    plot = plot.opts(title=season_name, legend_position="right")
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    map_path = output_dir / f"{season_name}.html"
+    hv.save(plot, str(map_path))
+    print(f"Map saved to {map_path}")
 
 
 def print_match_report(df_season):
@@ -69,6 +177,12 @@ def print_match_report(df_season):
         df_season["segment_path"].nunique() if "segment_path" in df_season.columns else "N/A"
     )
     print(f"Total segments: {n_segments}")
+    if "segment_date_str" in df_season.columns:
+        per_day = df_season.groupby("segment_date_str").size()
+        print(f"Date range: {per_day.index.min()} .. {per_day.index.max()}  ({len(per_day)} days)")
+    missing_rx = df_season["rx_samps_path"].apply(lambda p: not Path(p).exists()).sum()
+    if missing_rx:
+        print(f"Recordings with no merged _rx_samps.bin yet: {missing_rx}")
     print("=" * 60)
 
 
