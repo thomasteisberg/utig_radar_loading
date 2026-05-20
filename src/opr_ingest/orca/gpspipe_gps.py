@@ -1,29 +1,86 @@
 """Loader for ORCA `<prefix>_gpspipe_stdout.log` files.
 
-Each line of the log is gpsd output with a leading UNIX timestamp and an
-embedded JSON TPV record (lat/lon/alt/altMSL/ecef*). See
-reference/gps_processing.py for the original parser.
+Each TPV line is shaped like::
+
+    2025-12-04 22:14:15 1764886455.314251: {"class":"TPV", ..., "time":"2025-12-04T22:14:24.000Z", "lat":..., ...}
+
+The leading float is the host's wall-clock Unix time when gpsd delivered the
+line (COMP_TIME). The TPV JSON ``time`` field is the GPS receiver's UTC fix
+time (GPS_TIME). Both are emitted so downstream alignment can interpolate
+radar pulse times (in host-clock space) onto GPS positions despite any host
+clock drift.
+
+Ported from the regex/JSON extractor in `reference/gps_processing.py` and
+extended to also surface the TPV ``time``, ``mode``, ``speed``, and ``track``
+fields.
 """
 
+import json
+import re
 from pathlib import Path
 from typing import Union
 
 import pandas as pd
 
 
-def load_and_parse_gpspipe_file(path: Union[str, Path]) -> pd.DataFrame:
-    """Return a DataFrame with OPR-standard columns from one gpspipe log.
+_LINE_RE = re.compile(r"(\d+\.\d+):\s*(\{.*\})\s*$")
 
-    Expected output columns:
-        GPS_TIME   : seconds since Unix epoch (from the leading UNIX timestamp)
-        LAT, LON   : decimal degrees
-        ELEV       : meters (prefer altMSL over alt)
-        ROLL/PITCH/HEADING: zeros — gpspipe TPV records carry no attitude
-        (pass-through) ecefx, ecefy, ecefz from the TPV record
-    """
-    raise NotImplementedError(
-        "ORCA gpspipe_gps.load_and_parse_gpspipe_file: port the regex-based "
-        "TPV extraction from reference/gps_processing.py:parse_line, then map "
-        "to OPR columns. Open questions: leap-second handling vs UTIG GPS_TIME, "
-        "and how to source RADAR_TIME (likely needs the UHD log)."
-    )
+_OUTPUT_COLUMNS = [
+    "COMP_TIME",
+    "GPS_TIME",
+    "LAT",
+    "LON",
+    "ELEV",
+    "ecefx",
+    "ecefy",
+    "ecefz",
+    "speed",
+    "track",
+    "mode",
+]
+
+
+def load_and_parse_gpspipe_file(path: Union[str, Path]) -> pd.DataFrame:
+    """Parse a `_gpspipe_stdout.log` file into a DataFrame of TPV records."""
+    rows = []
+    with open(path) as f:
+        for line in f:
+            if '"class":"TPV"' not in line:
+                continue
+            m = _LINE_RE.search(line)
+            if not m:
+                continue
+            try:
+                tpv = json.loads(m.group(2))
+            except json.JSONDecodeError:
+                continue
+            if tpv.get("class") != "TPV":
+                continue
+
+            gps_iso = tpv.get("time")
+            if gps_iso is None:
+                continue
+            try:
+                gps_time = pd.Timestamp(gps_iso).timestamp()
+            except (ValueError, TypeError):
+                continue
+
+            elev = tpv.get("altMSL")
+            if elev is None:
+                elev = tpv.get("alt")
+
+            rows.append({
+                "COMP_TIME": float(m.group(1)),
+                "GPS_TIME": gps_time,
+                "LAT": tpv.get("lat"),
+                "LON": tpv.get("lon"),
+                "ELEV": elev,
+                "ecefx": tpv.get("ecefx"),
+                "ecefy": tpv.get("ecefy"),
+                "ecefz": tpv.get("ecefz"),
+                "speed": tpv.get("speed"),
+                "track": tpv.get("track"),
+                "mode": tpv.get("mode"),
+            })
+
+    return pd.DataFrame(rows, columns=_OUTPUT_COLUMNS)
