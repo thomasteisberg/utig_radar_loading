@@ -9,7 +9,6 @@ log's `[START]` + PRI math, so the GPS and header files share one radar
 clock.
 """
 
-import re
 import warnings
 from pathlib import Path
 from typing import List, Optional, Union
@@ -22,22 +21,7 @@ from opr_ingest.core.opr_gps_matlab import (
     save_gps_matlab_file,
 )
 from opr_ingest.orca.gpspipe_gps import load_and_parse_gpspipe_file
-
-
-_UHD_START_RE = re.compile(r"^\[(\d+\.\d+)\].*\[START\]")
-
-
-def _parse_uhd_start_timestamp(uhd_log_path: Union[str, Path]) -> Optional[float]:
-    """Return the host Unix timestamp from a UHD stdout log's `[START]` line."""
-    try:
-        with open(uhd_log_path) as f:
-            for line in f:
-                m = _UHD_START_RE.match(line)
-                if m:
-                    return float(m.group(1))
-    except OSError:
-        return None
-    return None
+from opr_ingest.orca.uhd_log import parse_start_timestamp
 
 
 def generate_gps_file(
@@ -62,7 +46,7 @@ def generate_gps_file(
         comp_min = merged_df["COMP_TIME"].min()
         comp_max = merged_df["COMP_TIME"].max()
         for uhd_path in uhd_log_paths:
-            start_t = _parse_uhd_start_timestamp(uhd_path)
+            start_t = parse_start_timestamp(uhd_path)
             if start_t is None:
                 warnings.warn(f"Could not find [START] in {uhd_path}")
             elif not (comp_min <= start_t <= comp_max):

@@ -29,6 +29,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from opr_ingest.orca.uhd_log import parse_start_timestamp
+
 
 PREFIX_PATTERN = r"\d{8}_\d{6}"
 _PREFIX_RE = re.compile(rf"^{PREFIX_PATTERN}$")
@@ -44,20 +46,13 @@ _OPTIONAL_SIBLINGS = {
 }
 _ALL_SIBLINGS = {**_REQUIRED_SIBLINGS, **_OPTIONAL_SIBLINGS}
 
-_START_LINE_RE = re.compile(r"^\[(\d+\.\d+)\].*\[START\]")
-
 
 def _recover_timestamp_from_uhd_log(uhd_log_path):
     """Return a naive-UTC datetime from the `[START]` line of a UHD stdout log, or None."""
-    try:
-        with open(uhd_log_path) as f:
-            for line in f:
-                m = _START_LINE_RE.match(line)
-                if m:
-                    return datetime.fromtimestamp(float(m.group(1)), tz=timezone.utc).replace(tzinfo=None)
-    except OSError as exc:
-        print(f"  warning: cannot read {uhd_log_path}: {exc}")
-    return None
+    start_t = parse_start_timestamp(uhd_log_path)
+    if start_t is None:
+        return None
+    return datetime.fromtimestamp(start_t, tz=timezone.utc).replace(tzinfo=None)
 
 
 def load_file_index_df(base_path: str, cache_file: str, read_cache: bool = True) -> pd.DataFrame:
