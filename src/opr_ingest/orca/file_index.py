@@ -79,9 +79,19 @@ def load_file_index_df(base_path: str, cache_file: str, read_cache: bool = True)
         for col, suf in _ALL_SIBLINGS.items():
             row[col] = str(p.with_name(prefix + suf))
 
-        for col in _REQUIRED_SIBLINGS:
-            if not Path(row[col]).exists():
+        empty = []
+        for col in (*_REQUIRED_SIBLINGS, "config_path"):
+            sib = Path(row[col])
+            if not sib.exists():
                 print(f"  warning: {prefix} missing {col} ({row[col]})")
+            elif sib.stat().st_size == 0:
+                empty.append(col)
+        if empty:
+            # Zero-byte required siblings mean the capture never produced data
+            # (rx_samps never written, UHD log empty so no [START], or config
+            # truncated). Drop these — no downstream stage can use them.
+            print(f"  skipping {prefix}: empty {', '.join(empty)}")
+            continue
 
         try:
             ts = datetime.strptime(prefix, "%Y%m%d_%H%M%S")
