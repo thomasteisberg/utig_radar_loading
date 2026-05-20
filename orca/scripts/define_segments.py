@@ -29,7 +29,7 @@ def build_recording_index(user_config: dict) -> pd.DataFrame:
     """Index ORCA recordings under the configured base path."""
     df_recordings = file_index.load_file_index_df(
         user_config["orca_raw_data_base_path"],
-        user_config["file_index_cache"],
+        user_config["orca_file_index_cache"],
         read_cache=True,
     )
     return file_index.arrange_by_transect(df_recordings)

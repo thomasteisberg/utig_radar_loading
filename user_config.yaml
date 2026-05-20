@@ -5,8 +5,10 @@ raw_data_base_path: "/kucresis/scratch/data/UTIG"
 # files: *_rx_samps.bin / *_config.yaml / *_uhd_stdout.log / *_gpspipe_stdout.log)
 orca_raw_data_base_path: ""  # TODO: fill in once known
 
-# File index cache (speeds up repeated runs)
+# File index caches (speed up repeated runs; separate per dataset since the
+# UTIG and ORCA indexes have different schemas)
 file_index_cache: "outputs/file_index.csv"
+orca_file_index_cache: "outputs/orca_file_index.csv"
 
 # Base directories for outputs (season name is appended automatically)
 gps_support_base_dir: "/resfs/GROUPS/CRESIS/dataproducts/opr_support/gps"
