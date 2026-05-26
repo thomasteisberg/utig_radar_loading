@@ -1,0 +1,99 @@
+season_name: "2025_Antarctica_ORCA"
+datasets: ["ORCA"]
+
+# Defaults for generating parameter spreadsheet tabs.
+# Skeleton mirroring utig/seasons_config/2015_Antarctica_BaslerJKB.yaml — values
+# below are placeholders. Fill in once ORCA's radar/system parameters are known.
+params:
+  cmd:
+    frms: ~
+    records: 1
+    qlook: 1
+    sar: ~
+    array: ~
+    generic: ~
+    mission_names: ""
+    notes: ""
+
+  records:
+    # 425 is the UTIG file.version; ORCA reuses the UTIG ingest schema until OPR
+    # adds an ORCA-specific reader.
+    file.version: 425
+    file.boards: "{''}"
+    file.start_idx: 1
+    file.stop_idx: 1
+    file.start_record: ~
+    file.stop_record: ~
+    file.base_dir: ~              # filled by ORCA define_segments (from user_config.orca_raw_data_base_path)
+    file.board_folder_name: ~     # filled by ORCA define_segments (per-segment prefix)
+    file.prefix: "_rx_samps.bin"  # appended to file.base_dir/file.board_folder_name; the per-segment prefix lives in file.board_folder_name
+    file.clk: ~                   # TODO: ORCA radar clock rate (= GENERATE.sample_rate from _config.yaml)
+    frames.geotiff_fn: "antarctica/Landsat-7/Antarctica_LIMA.tif"
+    frames.mode: 1
+    gps.time_offset: 0
+    gps.en: 1
+    gps.fn: ~                     # filled by ORCA define_segments
+
+  qlook:
+    out_path: ~
+    img_comb: "[]"                # single image, no fast-time combining
+    imgs: "{[1 1]}"               # one wf-adc pair: (wf=1, adc=1)
+    block_size: 20000
+    motion_comp: 0
+    dec: 10
+    inc_dec: 5
+    surf.en: 1
+    surf.profile: "RDS_OIB"
+    resample: "[1 1]"
+    radiometric_corr_dB: ~
+
+  radar:
+    # Per-segment fields (filled from each recording's _config.yaml by
+    # define_segments.py via opr_ingest.orca.radar_config.load_radar_params):
+    fs: ~                # RF<n>.rx_rate
+    prf: ~               # 1 / CHIRP.pulse_rep_int
+    f0: ~                # RF<n>.freq + RF<n>.lo_offset + GENERATE.lo_offset_sw - chirp_bandwidth/2
+    f1: ~                # RF<n>.freq + RF<n>.lo_offset + GENERATE.lo_offset_sw + chirp_bandwidth/2
+    Tpd: ~               # GENERATE.chirp_length
+    presums: ~           # CHIRP.num_presums
+    # Static across all current SORA recordings (B205mini, single-channel):
+    adc_bits: 12                          # B205mini ADC width
+    Vpp_scale: 1                          # full-scale Vpp; refine when calibrated
+    lever_arm_fh: "@lever_arm"            # placeholder; lever_arm.m to be written
+    size: 1                               # 1 board
+    deconv.en: 0                          # no waveform deconvolution
+    adcs: "[1]"                           # single ADC, index 1
+    DDC_dec: 1                            # no software DDC (SDR does it in HW)
+    DDC_freq: 0
+    tukey: 0.1
+    BW_window: ~                          # left null; OPR should infer from f0/f1
+    ft_wind: "@(N)tukeywin(N,0.2)"
+    ft_dec: "[1 1]"
+    tx_weights: "[1]"
+    system_dB: 0
+    rx_paths: "[1]"
+    adc_gains_dB: "[0]"                   # absolute gains TBD; 0 = no compensation
+    chan_equal_dB: "[0]"
+    chan_equal_deg: "[0]"
+    Tsys: "[0]"
+    bit_shifts: "[0]"
+    Tadc_adjust: 0
+    Tadc: 0
+    gain_en: "[0]"
+    coh_noise_method: "'analysis'"
+
+  array:
+    in_path: ~
+    out_path: ~
+    img_comb: "[]"
+    imgs: "{[1 1]}"
+    method: "'standard'"
+    bin_rng: "[-1:1]"
+    line_rng: "[-10:10]"
+    dline: 6
+    ft_over_sample: 2
+    radiometric_corr_dB: ~
+
+  sar: {}       # TODO: fill once records_create + qlook are validated
+  post: {}      # TODO
+  analysis_noise: {}  # TODO
