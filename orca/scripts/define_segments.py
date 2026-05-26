@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from opr_ingest.orca import file_index, segment_splits
+from opr_ingest.orca import file_index, radar_config, segment_splits
 
 
 def load_configs(season_config_path: str):
@@ -69,6 +69,21 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
     grouped = df_season.groupby(["segment_date_str", "segment_number"])
     segments = grouped.first().index
 
+    # Per-segment radar params from each segment's first recording's _config.yaml.
+    # ORCA configs vary across recordings (rx_duration, num_presums, possibly
+    # sample rate and RF center), so these can't live in the yaml as scalars.
+    radar_keys = ("fs", "prf", "f0", "f1", "Tpd", "presums")
+    per_segment_radar = {k: [] for k in radar_keys}
+    for (date_str, seg_num) in segments:
+        grp = grouped.get_group((date_str, seg_num)).sort_values("start_timestamp")
+        params = radar_config.load_radar_params(grp.iloc[0]["config_path"])
+        for k in radar_keys:
+            per_segment_radar[k].append(params[k])
+    radar_overrides = {
+        k: pd.Series(v, index=segments) for k, v in per_segment_radar.items()
+    }
+    file_clk = radar_overrides["fs"]
+
     def board_folder_per_segment(x):
         prefixes = list(x.sort_values("start_timestamp").index)
         return "{'" + "', '".join(prefixes) + "'}"
@@ -106,9 +121,16 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
         "file.board_folder_name": board_folder_name,
         "gps.fn": gps_fn,
         "gps.field_fn": field_gps,
+        "file.clk": file_clk,
     }).to_csv(base_params_dir / "records.csv")
 
-    sheets_with_defaults_only = ["qlook", "sar", "array", "radar", "post", "analysis_noise"]
+    radar_defaults = defaults["params"].get("radar") or {}
+    if radar_defaults:
+        make_parameter_sheet(
+            radar_defaults, segments, overrides=radar_overrides
+        ).to_csv(base_params_dir / "radar.csv")
+
+    sheets_with_defaults_only = ["qlook", "sar", "array", "post", "analysis_noise"]
     for sheet_name in sheets_with_defaults_only:
         sheet_defaults = defaults["params"].get(sheet_name) or {}
         if sheet_defaults:
