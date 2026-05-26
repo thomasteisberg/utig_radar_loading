@@ -1,14 +1,22 @@
-"""Assemble a directory of per-sheet CSVs into a single OPR parameter xlsx.
+"""Assemble a directory of per-sheet CSVs into an OPR parameter xlsx.
 
-Each `<name>.csv` in the input directory becomes a `<name>` sheet in the output
-workbook (one CSV → one tab, preserving header + data). Sheets are ordered by
-the canonical OPR sequence (cmd, records, qlook, sar, array, radar, post,
-analysis_noise) when present, then any extra CSVs are appended alphabetically.
+Emits OPR's expected layout: the `cmd` sheet gets a 5-row header block
+(Version / Radar / Season metadata, then column names, then per-column
+type codes), every other sheet gets a 2-row header block (column names,
+then type codes). OPR's `read_param_xls_generic.m` literally searches
+for "Date" in column 1 to locate the header row and errors if any
+column has a name but no type code.
+
+Type codes per OPR convention:
+  r       general read (numeric, MATLAB expressions, cell strings)
+  b       boolean (0/1)
+  t       text (paths, names, profiles)
 
 Usage:
-    uv run scripts/csvs_to_xlsx.py <csv_dir> [--output <path.xlsx>]
+    uv run scripts/csvs_to_xlsx.py <csv_dir> [-o <path.xlsx>] [--radar-name rds]
 
-The default output is `<csv_dir>/<csv_dir.name>.xlsx`.
+Default output: `<csv_dir>/<csv_dir.name>.xlsx`. Default radar_name `rds`.
+Season name is taken from the directory name.
 """
 
 import argparse
@@ -29,6 +37,35 @@ CANONICAL_ORDER = [
     "analysis_noise",
 ]
 
+PARAM_FILE_VERSION = "4.0"
+
+# Type-code overrides by (sheet, column). Anything not listed defaults to 'r'.
+_CMD_TYPECODES = {
+    "frms": "r",
+    "records": "b",
+    "qlook": "b",
+    "sar": "b",
+    "array": "b",
+    "generic": "r",
+    "mission_names": "t",
+    "notes": "t",
+}
+
+# Columns that must be read as literal text (paths, etc.) rather than
+# evaluated as MATLAB expressions. Applies to non-cmd sheets.
+_TEXT_COLUMNS = {
+    # records
+    "file.base_dir",
+    "file.prefix",
+    "frames.geotiff_fn",
+    "gps.fn",
+    # qlook
+    "out_path",
+    "surf.profile",
+    # array
+    "in_path",
+}
+
 
 def order_csvs(csv_paths):
     by_stem = {p.stem: p for p in csv_paths}
@@ -37,12 +74,46 @@ def order_csvs(csv_paths):
     return ordered
 
 
+def _typecode(sheet_name: str, col_name: str) -> str:
+    if sheet_name == "cmd":
+        return _CMD_TYPECODES.get(col_name, "r")
+    return "t" if col_name in _TEXT_COLUMNS else "r"
+
+
+def _build_opr_rows(df: pd.DataFrame, sheet_name: str, season_name: str, radar_name: str):
+    """Return a list of rows (each row a list of cell values) in OPR layout."""
+    # Columns 1 and 2 are always Date/Segment; columns 3+ are the actual fields.
+    field_cols = list(df.columns[2:])
+    type_codes = [_typecode(sheet_name, c) for c in field_cols]
+
+    if sheet_name == "cmd":
+        header_rows = [
+            ["Version", PARAM_FILE_VERSION] + [None] * len(field_cols),
+            ["Radar", radar_name] + [None] * len(field_cols),
+            ["Season", season_name] + [None] * len(field_cols),
+            ["Date", None] + field_cols,
+            ["YYYYMMDD", "Segment"] + type_codes,
+        ]
+    else:
+        header_rows = [
+            ["Date", "Segment"] + field_cols,
+            ["YYYYMMDD", "Segment"] + type_codes,
+        ]
+
+    data_rows = df.values.tolist()
+    return header_rows + data_rows
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("csv_dir", type=Path, help="Directory containing per-sheet CSVs")
     parser.add_argument(
         "-o", "--output", type=Path, default=None,
         help="Output xlsx path (default: <csv_dir>/<csv_dir.name>.xlsx)",
+    )
+    parser.add_argument(
+        "--radar-name", default="rds",
+        help="OPR radar_name written to cell B2 of the cmd sheet (default: rds)",
     )
     args = parser.parse_args()
 
@@ -54,6 +125,7 @@ def main():
     if not csv_paths:
         sys.exit(f"No CSVs found in {csv_dir}")
 
+    season_name = csv_dir.name
     output = args.output or csv_dir / f"{csv_dir.name}.xlsx"
     output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -62,10 +134,16 @@ def main():
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         for path in ordered_paths:
             df = pd.read_csv(path)
-            df.to_excel(writer, sheet_name=path.stem, index=False)
+            rows = _build_opr_rows(df, path.stem, season_name, args.radar_name)
+            out_df = pd.DataFrame(rows)
+            out_df.to_excel(
+                writer, sheet_name=path.stem, index=False, header=False
+            )
             print(f"  {path.stem:16s}  rows={len(df):>4}  cols={df.shape[1]:>2}  ← {path.name}")
 
     print(f"\nWrote {len(ordered_paths)} sheets to {output}")
+    print(f"  season_name = {season_name}")
+    print(f"  radar_name  = {args.radar_name}")
 
 
 if __name__ == "__main__":
