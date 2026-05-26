@@ -59,7 +59,7 @@ params:
     # Static across all current SORA recordings (B205mini, single-channel):
     adc_bits: 12                          # B205mini ADC width
     Vpp_scale: 1                          # full-scale Vpp; refine when calibrated
-    lever_arm_fh: "@lever_arm"            # placeholder; lever_arm.m to be written
+    lever_arm_fh: "@lever_arm_ORCA"       # see orca/matlab/lever_arm_ORCA.m (stub returning zeros)
     size: 1                               # 1 board
     deconv.en: 0                          # no waveform deconvolution
     adcs: "[1]"                           # single ADC, index 1

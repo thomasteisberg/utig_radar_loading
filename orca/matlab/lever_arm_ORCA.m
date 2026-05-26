@@ -1,5 +1,5 @@
-function [phase_center] = lever_arm(param, tx_weights, rxchannel)
-% lever_arm  ORCA stub returning zero phase centers.
+function [phase_center] = lever_arm_ORCA(param, tx_weights, rxchannel)
+% lever_arm_ORCA  ORCA stub returning zero phase centers.
 %
 % PLACEHOLDER — DO NOT USE FOR REAL PROCESSING.
 %
@@ -17,12 +17,11 @@ function [phase_center] = lever_arm(param, tx_weights, rxchannel)
 % along-track decimation) will be incorrect until this is replaced with
 % measured values.
 %
-% Wiring: this function is selected via the radar.lever_arm_fh column
-% in the parameter spreadsheet (currently `@lever_arm`, set in
-% orca/seasons_config/glass_orca_season.yaml). Add orca/matlab/ to your
-% MATLAB path *before* the main OPR path so this shadows OPR's
-% lever_arm.m for ORCA seasons only, OR copy/merge this case into the
-% main lever_arm.m and remove this stub.
+% Wiring: selected via `radar.lever_arm_fh = @lever_arm_ORCA` (set in
+% orca/seasons_config/glass_orca_season.yaml). Add orca/matlab/ to the
+% MATLAB path so OPR can resolve the function handle. The name is
+% intentionally not `lever_arm` so it doesn't shadow OPR's central
+% lever_arm.m for UTIG/other seasons.
 %
 % INPUTS
 %   param        OPR parameter struct (used by real lever_arm.m to
