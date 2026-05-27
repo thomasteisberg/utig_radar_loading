@@ -10,13 +10,45 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from opr_ingest.orca import file_index, gps_pipeline, radar_config, segment_splits
+from opr_ingest.orca import file_index, gps_pipeline, headers, radar_config, segment_splits
 
 # Minimum usable GPS fixes for a segment to be processable. OPR's
 # records_create_sync_gps interp1 needs >= 2 points inside the radar window;
 # segments below this (e.g. early ground/calibration runs with no 3D fix) are
 # marked 'do not process' so the run scripts skip them.
 MIN_GPS_POINTS = 2
+
+
+def gps_coverage_dnp_reason(gps_path, rx_samps_path) -> str:
+    """Empty string if OPR can sync GPS for this recording, else a DNP reason.
+
+    Pre-empts the two records_create_sync_gps failures we hit on marginal/short
+    ORCA recordings, by replicating its checks against the radar comp_time
+    window (from headers.get_header_information):
+
+      * < MIN_GPS_POINTS usable fixes inside the radar window -> interp1
+        'requires at least two sample points'.
+      * radar window not bracketed by GPS coverage -> OPR interpolates with
+        interp1(...,NaN) (no extrapolation), producing NaN lat/lon/attitude and
+        a `keyboard` halt.
+
+    Also catches recordings whose radar header is unreadable (e.g. the merged
+    _rx_samps.bin not present yet for unmerged-chunk prefixes).
+    """
+    comp = gps_pipeline.valid_gps_comp_times(gps_path)
+    if len(comp) < MIN_GPS_POINTS:
+        return f"only {len(comp)} valid GPS fix(es) < {MIN_GPS_POINTS}"
+    try:
+        radar_comp = headers.get_header_information(rx_samps_path)["comp_time"]
+    except Exception as e:
+        return f"radar header unreadable ({type(e).__name__})"
+    r0, r1 = float(radar_comp[0]), float(radar_comp[-1])
+    n_in = int(((comp >= r0) & (comp <= r1)).sum())
+    if n_in < MIN_GPS_POINTS:
+        return f"only {n_in} GPS fix(es) in radar window < {MIN_GPS_POINTS}"
+    if comp.min() > r0 or comp.max() < r1:
+        return "GPS coverage does not bracket radar comp_time window"
+    return ""
 
 
 def load_configs(season_config_path: str):
@@ -120,11 +152,11 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
     def notes_per_segment(x):
         x = x.sort_values("start_timestamp")
         prefixes = list(x.index)
-        valid = int(x["valid_gps_points"].sum()) if "valid_gps_points" in x else MIN_GPS_POINTS
-        if valid < MIN_GPS_POINTS:
+        reasons = [r for r in x["dnp_reason"] if r] if "dnp_reason" in x else []
+        if reasons:
             # Marked DNP: OPR's run scripts filter cmd.notes on 'do not process'
             # (case-insensitive regexp), so these are skipped automatically.
-            return f"do not process: only {valid} valid GPS fix(es) < {MIN_GPS_POINTS} ({prefixes})"
+            return f"do not process ({reasons[0]}): {prefixes}"
         return prefixes
 
     file_prefix = grouped.apply(file_prefix_per_segment, include_groups=False)
@@ -255,10 +287,11 @@ def main():
 
     df_season = segment_splits.assign_segments(df_recordings)
 
-    # Predict per-recording usable GPS fixes (same filter as generate_gps_file)
-    # so generate_csvs can mark GPS-less segments 'do not process'.
-    df_season["valid_gps_points"] = df_season["gps_path"].apply(
-        gps_pipeline.count_valid_gps_points
+    # Pre-flight each recording's GPS↔radar overlap (same checks OPR's
+    # records_create_sync_gps does) so generate_csvs can mark unprocessable
+    # segments 'do not process' instead of halting the MATLAB run.
+    df_season["dnp_reason"] = df_season.apply(
+        lambda r: gps_coverage_dnp_reason(r["gps_path"], r["rx_samps_path"]), axis=1
     )
 
     print_match_report(df_season)

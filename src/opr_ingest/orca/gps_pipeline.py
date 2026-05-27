@@ -13,6 +13,7 @@ import warnings
 from pathlib import Path
 from typing import List, Optional, Union
 
+import numpy as np
 import pandas as pd
 
 from opr_ingest.core.opr_gps_matlab import (
@@ -24,26 +25,33 @@ from opr_ingest.orca.gpspipe_gps import load_and_parse_gpspipe_file
 from opr_ingest.orca.uhd_log import parse_start_timestamp
 
 
-def count_valid_gps_points(gps_path: Union[str, Path]) -> int:
-    """Number of usable GPS fixes a recording's gpspipe log would contribute.
+def valid_gps_comp_times(gps_path: Union[str, Path]) -> np.ndarray:
+    """COMP_TIME (host Unix seconds) of usable GPS fixes in a gpspipe log.
 
     Mirrors the filtering ``generate_gps_file`` applies (3D-fix ``mode >= 3``
-    plus non-NaN position/time), so Stage 1 can predict which segments would
-    get an empty/degenerate GPS .mat. OPR's ``records_create_sync_gps`` interp1
-    needs >= 2 fixes inside the radar window; segments below that should be
-    marked 'do not process'. Keep this filter in sync with generate_gps_file.
+    plus non-NaN position/time), so Stage 1 can predict the GPS coverage OPR
+    will actually have. Returns an empty array if the log is missing,
+    unparseable, or has no usable fixes. Keep this filter in sync with
+    generate_gps_file.
     """
     try:
         df = load_and_parse_gpspipe_file(gps_path)
     except Exception:
-        return 0
+        return np.array([], dtype=float)
     if df.empty:
-        return 0
+        return np.array([], dtype=float)
     if "mode" in df.columns:
         df = df[df["mode"] >= 3]
     subset = [c for c in ["GPS_TIME", "COMP_TIME", "LAT", "LON"] if c in df.columns]
     df = df.dropna(subset=subset)
-    return len(df)
+    if "COMP_TIME" not in df.columns:
+        return np.array([], dtype=float)
+    return df["COMP_TIME"].to_numpy(dtype=float)
+
+
+def count_valid_gps_points(gps_path: Union[str, Path]) -> int:
+    """Number of usable GPS fixes a recording's gpspipe log would contribute."""
+    return len(valid_gps_comp_times(gps_path))
 
 
 def generate_gps_file(
