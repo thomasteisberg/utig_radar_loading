@@ -24,6 +24,28 @@ from opr_ingest.orca.gpspipe_gps import load_and_parse_gpspipe_file
 from opr_ingest.orca.uhd_log import parse_start_timestamp
 
 
+def count_valid_gps_points(gps_path: Union[str, Path]) -> int:
+    """Number of usable GPS fixes a recording's gpspipe log would contribute.
+
+    Mirrors the filtering ``generate_gps_file`` applies (3D-fix ``mode >= 3``
+    plus non-NaN position/time), so Stage 1 can predict which segments would
+    get an empty/degenerate GPS .mat. OPR's ``records_create_sync_gps`` interp1
+    needs >= 2 fixes inside the radar window; segments below that should be
+    marked 'do not process'. Keep this filter in sync with generate_gps_file.
+    """
+    try:
+        df = load_and_parse_gpspipe_file(gps_path)
+    except Exception:
+        return 0
+    if df.empty:
+        return 0
+    if "mode" in df.columns:
+        df = df[df["mode"] >= 3]
+    subset = [c for c in ["GPS_TIME", "COMP_TIME", "LAT", "LON"] if c in df.columns]
+    df = df.dropna(subset=subset)
+    return len(df)
+
+
 def generate_gps_file(
     gpspipe_paths: List[Union[str, Path]],
     output_path: Union[str, Path],

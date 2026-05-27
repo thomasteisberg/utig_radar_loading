@@ -10,7 +10,13 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from opr_ingest.orca import file_index, radar_config, segment_splits
+from opr_ingest.orca import file_index, gps_pipeline, radar_config, segment_splits
+
+# Minimum usable GPS fixes for a segment to be processable. OPR's
+# records_create_sync_gps interp1 needs >= 2 points inside the radar window;
+# segments below this (e.g. early ground/calibration runs with no 3D fix) are
+# marked 'do not process' so the run scripts skip them.
+MIN_GPS_POINTS = 2
 
 
 def load_configs(season_config_path: str):
@@ -112,7 +118,14 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
         return "{'" + "', '".join(str(p) for p in paths) + "'}"
 
     def notes_per_segment(x):
-        return list(x.sort_values("start_timestamp").index)
+        x = x.sort_values("start_timestamp")
+        prefixes = list(x.index)
+        valid = int(x["valid_gps_points"].sum()) if "valid_gps_points" in x else MIN_GPS_POINTS
+        if valid < MIN_GPS_POINTS:
+            # Marked DNP: OPR's run scripts filter cmd.notes on 'do not process'
+            # (case-insensitive regexp), so these are skipped automatically.
+            return f"do not process: only {valid} valid GPS fix(es) < {MIN_GPS_POINTS} ({prefixes})"
+        return prefixes
 
     file_prefix = grouped.apply(file_prefix_per_segment, include_groups=False)
     field_gps = grouped.apply(field_gps_per_segment, include_groups=False)
@@ -241,6 +254,12 @@ def main():
     print(f"Indexed {len(df_recordings)} ORCA recordings")
 
     df_season = segment_splits.assign_segments(df_recordings)
+
+    # Predict per-recording usable GPS fixes (same filter as generate_gps_file)
+    # so generate_csvs can mark GPS-less segments 'do not process'.
+    df_season["valid_gps_points"] = df_season["gps_path"].apply(
+        gps_pipeline.count_valid_gps_points
+    )
 
     print_match_report(df_season)
 
