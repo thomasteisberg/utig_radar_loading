@@ -80,7 +80,10 @@ params:
     Tadc_adjust: 0
     Tadc: 0
     gain_en: "[0]"
-    coh_noise_method: "'analysis'"
+    # 'estimated': qlook estimates coherent noise inline, so the analysis
+    # chain (run_analysis -> run_collate_coh_noise) is not required. Switch
+    # back to 'analysis' once analysis_noise/analysis sheet defaults exist.
+    coh_noise_method: "'estimated'"
 
   array:
     in_path: ~
