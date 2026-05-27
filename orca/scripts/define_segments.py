@@ -42,10 +42,15 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
     (file.version 425 doubles as the ORCA schema for now). ORCA-specific overrides:
 
       * `file.base_dir` → user_config["orca_raw_data_base_path"]
-      * `file.board_folder_name` → cell-string list of one element per segment, the
-        recording prefix (so `base_dir + board_folder_name + file.prefix` resolves
-        to `<base_dir>/<prefix>_rx_samps.bin` with `file.prefix: "_rx_samps.bin"`
-        set in the season yaml).
+      * `file.prefix` → per-segment `<recording_prefix>_rx_samps.bin` (the
+        recording timestamp + the `_rx_samps.bin` suffix from the season yaml).
+        `file.board_folder_name` is left empty. ORCA data is flat under
+        `file.base_dir`, but OPR's get_segment_file_list joins
+        `base_dir + board_folder_name` as a *directory* and globs `file.prefix*`
+        inside it. Putting the timestamp in file.prefix makes that glob match
+        `<base_dir>/<recording_prefix>_rx_samps.bin` directly — no per-recording
+        subdirectory (or hard-link) needed. (1 recording = 1 segment, so each
+        segment has exactly one prefix.)
       * `gps.fn` → absolute `<orca_gps_base_dir>/<season>/gps_<segment_path>.mat`.
         Must be absolute: OPR's `opr_filename_support` returns absolute paths
         as-is, but prepends `gRadar.support_path` (a shared, often read-only
@@ -89,9 +94,16 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
     }
     file_clk = radar_overrides["fs"]
 
-    def board_folder_per_segment(x):
+    rx_suffix = defaults["params"]["records"].get("file.prefix") or "_rx_samps.bin"
+
+    def file_prefix_per_segment(x):
         prefixes = list(x.sort_values("start_timestamp").index)
-        return "{'" + "', '".join(prefixes) + "'}"
+        if len(prefixes) != 1:
+            raise ValueError(
+                "Expected exactly one recording per segment (1:1 transect design); "
+                f"got {len(prefixes)} for this segment: {prefixes}"
+            )
+        return f"{prefixes[0]}{rx_suffix}"
 
     def field_gps_per_segment(x):
         paths = x.sort_values("start_timestamp")["gps_path"].dropna().unique().tolist()
@@ -102,7 +114,7 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
     def notes_per_segment(x):
         return list(x.sort_values("start_timestamp").index)
 
-    board_folder_name = grouped.apply(board_folder_per_segment, include_groups=False)
+    file_prefix = grouped.apply(file_prefix_per_segment, include_groups=False)
     field_gps = grouped.apply(field_gps_per_segment, include_groups=False)
     notes = grouped.apply(notes_per_segment, include_groups=False)
 
@@ -125,7 +137,7 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
 
     make_parameter_sheet(defaults["params"]["records"], segments, overrides={
         "file.base_dir": orca_raw_data_base_path,
-        "file.board_folder_name": board_folder_name,
+        "file.prefix": file_prefix,
         "gps.fn": gps_fn,
         "gps.field_fn": field_gps,
         "file.clk": file_clk,

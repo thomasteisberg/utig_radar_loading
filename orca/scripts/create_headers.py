@@ -49,16 +49,17 @@ def get_season_name(sheets: dict) -> str:
 def collect_radar_files(sheets: dict, processable, user_config: dict):
     """Collect ORCA recordings to process and their destination header paths.
 
-    For each processable row in `records`, expand `file.board_folder_name` (a
-    MATLAB cell-string of timestamp prefixes) into one (rx_samps_path,
-    header_mat_path) pair per prefix.
+    ORCA data is flat under `file.base_dir`, and `file.prefix` carries the full
+    rx_samps filename (recording timestamp + `_rx_samps.bin`), with
+    `file.board_folder_name` empty:
+        <base_dir>/<file.prefix>      (e.g. .../20251204_224207_rx_samps.bin)
 
-    ORCA recordings live as flat files directly under `file.base_dir`:
-        <base_dir>/<prefix><file.prefix>      (e.g. .../20251204_224207_rx_samps.bin)
-    Note there is no per-prefix subdirectory — `<prefix>` and `<file.prefix>`
-    concatenate to form a single filename. Header outputs mirror the OPR
-    convention (`<board_folder_name>/<stem>.mat`):
-        <header_base_dir>/<season>/<prefix>/<prefix><file.prefix>.mat
+    OPR's records_create reads the per-file header at
+        opr_filename_opr_tmp(...,'headers', fullfile(board_folder_name, [fn_name '.mat']))
+    With board_folder_name empty and fn_name the rx_samps stem, that is a flat
+        <opr_tmp>/headers/rds/<season>/<rx_stem>.mat
+    so we write the header to the matching flat location under header_base_dir
+    (point header_base_dir at <opr_tmp>/headers/rds to avoid a deploy hard-link).
     """
     records = sheets["records"]
     season_name = get_season_name(sheets)
@@ -71,24 +72,18 @@ def collect_radar_files(sheets: dict, processable, user_config: dict):
     for seg_idx in processable:
         row = records.loc[seg_idx]
         base_dir = row.get("file.base_dir", "")
-        board_folder_str = row.get("file.board_folder_name", "")
-        file_prefix = row.get("file.prefix", "_rx_samps.bin")
+        file_prefix = row.get("file.prefix", "")
 
-        if pd.isna(base_dir) or pd.isna(board_folder_str):
+        if pd.isna(base_dir) or pd.isna(file_prefix) or not str(file_prefix).strip():
             continue
-        if pd.isna(file_prefix):
-            file_prefix = "_rx_samps.bin"
 
-        folder_names = params.parse_matlab_cell_string(str(board_folder_str))
-
-        for folder_name in folder_names:
-            rx_path = Path(base_dir) / f"{folder_name}{file_prefix}"
-            if not rx_path.exists():
-                print(f"[WARNING] Radar file not found: {rx_path}")
-                continue
-            header_fn = header_base_dir / folder_name / f"{rx_path.stem}.mat"
-            radar_paths.append(str(rx_path))
-            header_locations.append(str(header_fn))
+        rx_path = Path(base_dir) / str(file_prefix)
+        if not rx_path.exists():
+            print(f"[WARNING] Radar file not found: {rx_path}")
+            continue
+        header_fn = header_base_dir / f"{rx_path.stem}.mat"
+        radar_paths.append(str(rx_path))
+        header_locations.append(str(header_fn))
 
     return radar_paths, header_locations
 
