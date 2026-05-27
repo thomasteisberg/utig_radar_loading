@@ -101,8 +101,27 @@ def _typecode(sheet_name: str, col_name: str) -> str:
     return "t" if col_name in _TEXT_COLUMNS else "r"
 
 
+def _order_struct_array_size_first(df: pd.DataFrame, sheet_name: str) -> pd.DataFrame:
+    """Move 'ar:wfs' (struct-array size) columns ahead of 'ar:wfs(N)' columns.
+
+    read_param_xls_generic builds the struct array from the size column by
+    *overwriting* the field (the size field "should go first"); any per-element
+    'ar:wfs(N)' columns read before it are wiped. Without this, the columns
+    preceding `size` (e.g. f0/f1/Tpd/presums) silently drop out and qlook
+    errors with "Unrecognized field name 'Tpd'". Date/Segment stay first; all
+    other columns keep their relative order.
+    """
+    fields = list(df.columns[2:])
+    size_cols = [c for c in fields if _typecode(sheet_name, c) == "ar:wfs"]
+    if not size_cols:
+        return df
+    rest = [c for c in fields if c not in size_cols]
+    return df[list(df.columns[:2]) + size_cols + rest]
+
+
 def _build_opr_rows(df: pd.DataFrame, sheet_name: str, season_name: str, radar_name: str):
     """Return a list of rows (each row a list of cell values) in OPR layout."""
+    df = _order_struct_array_size_first(df, sheet_name)
     # Columns 1 and 2 are always Date/Segment; columns 3+ are the actual fields.
     field_cols = list(df.columns[2:])
     type_codes = [_typecode(sheet_name, c) for c in field_cols]
