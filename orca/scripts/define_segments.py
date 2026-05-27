@@ -46,7 +46,12 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
         recording prefix (so `base_dir + board_folder_name + file.prefix` resolves
         to `<base_dir>/<prefix>_rx_samps.bin` with `file.prefix: "_rx_samps.bin"`
         set in the season yaml).
-      * `gps.fn` → `<gps_support_base_dir>/<season>/gps_<segment_path>.mat`
+      * `gps.fn` → absolute `<orca_gps_base_dir>/<season>/gps_<segment_path>.mat`.
+        Must be absolute: OPR's `opr_filename_support` returns absolute paths
+        as-is, but prepends `gRadar.support_path` (a shared, often read-only
+        tree) to relative ones. Pointing `orca_gps_base_dir` at your own
+        writable scratch keeps GPS out of the shared tree. Stage 2
+        (`create_gps_support.py`) writes the .mat to this same path.
       * `gps.field_fn` → cell-string list of gpspipe log paths
       * No `gps.postprocessed_fn` (ORCA has no separate post-processed GPS).
     """
@@ -56,7 +61,7 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
     base_params_dir = Path(user_config["params_output_base_dir"]) / season_name
     base_params_dir.mkdir(parents=True, exist_ok=True)
 
-    gps_support_base_dir = user_config["gps_support_base_dir"]
+    orca_gps_base_dir = user_config["orca_gps_base_dir"]
     orca_raw_data_base_path = user_config["orca_raw_data_base_path"]
 
     def make_parameter_sheet(default_values, segments, overrides=None):
@@ -101,9 +106,11 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
     field_gps = grouped.apply(field_gps_per_segment, include_groups=False)
     notes = grouped.apply(notes_per_segment, include_groups=False)
 
+    # Absolute path so OPR loads it directly (a relative path would be
+    # resolved against the shared, read-only gRadar.support_path).
     gps_fn = pd.Series(
         [
-            f"{gps_support_base_dir}/{season_name}/gps_{date_str}_{seg_num:02d}.mat"
+            f"{orca_gps_base_dir}/{season_name}/gps_{date_str}_{seg_num:02d}.mat"
             for (date_str, seg_num) in segments
         ],
         index=segments,

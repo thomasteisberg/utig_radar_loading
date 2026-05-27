@@ -42,7 +42,7 @@ def main():
         label = seg_label(row)
 
         gps_fn = row.get("gps.fn")
-        if pd.isna(gps_fn):
+        if pd.isna(gps_fn) or not str(gps_fn).strip():
             print(f"[SKIP] {label}: no gps.fn defined")
             n_skipped += 1
             continue
