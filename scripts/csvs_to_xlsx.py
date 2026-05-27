@@ -51,6 +51,21 @@ _CMD_TYPECODES = {
     "notes": "t",
 }
 
+# Radar-sheet columns that are segment-level (flat) rather than per-waveform.
+# Everything else on the radar sheet is routed into the param.radar.wfs(1)
+# struct array via the 'ar:wfs(1)' type code (see _typecode). This mirrors
+# OPR's radar schema: read_param_xls builds param.radar.wfs(N) from columns
+# whose type code is 'ar:wfs(N)', and a flat param.radar.<field> from 'r'.
+# Without this, qlook's img_combine_input_check errors with
+# "Unrecognized field name 'wfs'".
+_RADAR_FLAT_COLUMNS = {
+    "fs",
+    "prf",
+    "adc_bits",
+    "Vpp_scale",
+    "lever_arm_fh",
+}
+
 # Columns that must be read as literal text (paths, etc.) rather than
 # evaluated as MATLAB expressions. Applies to non-cmd sheets.
 _TEXT_COLUMNS = {
@@ -77,6 +92,12 @@ def order_csvs(csv_paths):
 def _typecode(sheet_name: str, col_name: str) -> str:
     if sheet_name == "cmd":
         return _CMD_TYPECODES.get(col_name, "r")
+    if sheet_name == "radar":
+        if col_name == "size":
+            return "ar:wfs"
+        if col_name not in _RADAR_FLAT_COLUMNS:
+            return "ar:wfs(1)"
+        # flat radar fields fall through to the text/r logic below
     return "t" if col_name in _TEXT_COLUMNS else "r"
 
 
