@@ -120,8 +120,12 @@ def get_header_information(rx_samps_path: Union[str, Path]) -> dict:
     # constant 3200 like UTIG MARFA/HICARS. Single-waveform (size-1) struct
     # in MATLAB; `wfs.num_sam == wfs(1).num_sam`, so the OPR indexing pattern
     # `records.settings.wfs(wf).num_sam` works without us having to coax
-    # hdf5storage into emitting a struct array.
-    wfs = {"num_sam": np.array([rx_len_samples], dtype=np.int64)}
+    # hdf5storage into emitting a struct array. dtype=float64 (MATLAB
+    # double) so downstream arithmetic in data_load_wfs.m line 748 -- e.g.
+    # `time = (0:dt:(Nt_pc-1)*dt)` -- doesn't mix int64 with double dt
+    # and trip "Double operands interacting with int64 operands must have
+    # integer values".
+    wfs = {"num_sam": np.array([rx_len_samples], dtype=np.float64)}
 
     return {
         "comp_time": comp_time,
