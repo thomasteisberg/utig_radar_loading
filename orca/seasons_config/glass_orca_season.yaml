@@ -116,9 +116,11 @@ params:
     # would be a no-op. Disable to avoid surprises.
     mocomp.en: 0
   post:
-    # Used by run_all_create_track_files for the output filename
-    # `tracks_<location>_<radar>_<season>.mat`. Add other post fields here
-    # when wiring up run_post_UTIG (currently empty -> 'Sheet not found' warning
-    # from read_param_xls, harmless for stages that don't need them).
+    # ops.location used by run_all_create_track_files for the output filename
+    # `tracks_<location>_<radar>_<season>.mat`.
     ops.location: "'antarctic'"
+    # concat_en read by run_post_UTIG line 149 without an isfield default; 0
+    # skips the season-level concat step (per-frame/per-segment products are
+    # still produced). Set to 1 if you want concatenated season outputs.
+    concat_en: 0
   analysis_noise: {}  # TODO
