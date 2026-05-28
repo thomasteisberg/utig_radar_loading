@@ -135,6 +135,13 @@ params:
     # 1 = relative elevation comp (airborne; uses Elevation).
     # 2 = surface-flatten (needs echo.depth and a clean surface layer).
     echo.elev_comp: 0
+    # echo.depth is a MATLAB string expression `eval()`'d in publish_echogram
+    # to set the y-axis depth range in meters relative to Surface_Depth.
+    # Used regardless of elev_comp (line 420 of publish_echogram, in the general
+    # else branch). Value below mirrors CReSIS GroundGHOST 2023 rds: 5 m above
+    # surface to 1500 m below. Adjust the +1500 to actual target ice thickness
+    # if needed (e.g. +3500 for thicker ice).
+    echo.depth: "'[min(Surface_Depth)-5 max(Surface_Depth)+1500]'"
     maps_en: 0       # segment map JPG; needs basemap GIS data, skipped for now
     csv_en: 0        # per-frame CSV (lat/lon/surface/bottom); data-delivery
     data_en: 0       # bulk data products (.nc/.mat copies); data-delivery
