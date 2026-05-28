@@ -114,8 +114,18 @@ def get_header_information(rx_samps_path: Union[str, Path]) -> dict:
 
     offsets = (np.arange(N, dtype=np.int64) * record_stride_bytes).reshape(1, N, 1)
 
+    # `wfs` propagates through records_create -> records.settings.wfs and is
+    # read by data_load_wfs.m (Nt_raw) and data_load.m (Nt) for v425 when
+    # present. ORCA's rx_duration varies per recording so this number isn't a
+    # constant 3200 like UTIG MARFA/HICARS. Single-waveform (size-1) struct
+    # in MATLAB; `wfs.num_sam == wfs(1).num_sam`, so the OPR indexing pattern
+    # `records.settings.wfs(wf).num_sam` works without us having to coax
+    # hdf5storage into emitting a struct array.
+    wfs = {"num_sam": np.array([rx_len_samples], dtype=np.int64)}
+
     return {
         "comp_time": comp_time,
         "radar_time": radar_time,
         "offset": offsets,
+        "wfs": wfs,
     }
