@@ -97,7 +97,14 @@ params:
     ft_over_sample: 2
     radiometric_corr_dB: ~
 
-  sar: {}       # TODO: fill once records_create + qlook are validated
+  sar:
+    # Minimal sar defaults so the sheet is emitted and param.sar exists.
+    # sar.m has ~20 internal `isfield(param.sar,...)` checks that default
+    # the rest (mocomp.en, sigma_x, presums, sar_type, st_wind, ...). Set
+    # imgs explicitly because the internal default is multi-image (assumes
+    # multi-channel) and ORCA is single-channel single-image.
+    imgs: "{[1 1]}"
+    chunk_len: 5000
   post:
     # Used by run_all_create_track_files for the output filename
     # `tracks_<location>_<radar>_<season>.mat`. Add other post fields here
