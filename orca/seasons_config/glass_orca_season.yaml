@@ -98,5 +98,10 @@ params:
     radiometric_corr_dB: ~
 
   sar: {}       # TODO: fill once records_create + qlook are validated
-  post: {}      # TODO
+  post:
+    # Used by run_all_create_track_files for the output filename
+    # `tracks_<location>_<radar>_<season>.mat`. Add other post fields here
+    # when wiring up run_post_UTIG (currently empty -> 'Sheet not found' warning
+    # from read_param_xls, harmless for stages that don't need them).
+    ops.location: "'antarctic'"
   analysis_noise: {}  # TODO
