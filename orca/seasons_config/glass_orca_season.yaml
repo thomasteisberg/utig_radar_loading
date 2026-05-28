@@ -98,13 +98,23 @@ params:
     radiometric_corr_dB: ~
 
   sar:
-    # Minimal sar defaults so the sheet is emitted and param.sar exists.
-    # sar.m has ~20 internal `isfield(param.sar,...)` checks that default
-    # the rest (mocomp.en, sigma_x, presums, sar_type, st_wind, ...). Set
-    # imgs explicitly because the internal default is multi-image (assumes
-    # multi-channel) and ORCA is single-channel single-image.
-    imgs: "{[1 1]}"
+    # Ground-survey SAR settings, modeled on CReSIS GroundGHOST 2023/2024
+    # (their tracked-vehicle Antarctic radar — closest analog to ORCA's
+    # geometry; see opr/matlab/missions/default_radar_params_2023_Antarctica_GroundGHOST_rds.m).
+    # sigma_x is the ONLY field sar.m doesn't internally default; everything
+    # else falls through unless overridden here.
+    imgs: "{[1 1]}"                # ORCA single channel/image
+    sigma_x: 1                     # along-track output spacing (m); matches
+                                   # GroundGHOST. Tune to actual platform speed.
     chunk_len: 5000
+    sar_type: "'fk'"
+    surf_filt_dist: 30             # m; replaces sar.m's 3000m airborne default
+    # ORCA-specific lever arm; matches radar.lever_arm_fh and the
+    # gRadar.cluster.hidden_depend_funs entry on the OPR host.
+    lever_arm_fh: "@lever_arm_ORCA"
+    # ORCA has no IMU; roll/pitch/heading are zeros, so motion compensation
+    # would be a no-op. Disable to avoid surprises.
+    mocomp.en: 0
   post:
     # Used by run_all_create_track_files for the output filename
     # `tracks_<location>_<radar>_<season>.mat`. Add other post fields here
