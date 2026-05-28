@@ -121,6 +121,16 @@ params:
     ops.location: "'antarctic'"
     # concat_en read by run_post_UTIG line 149 without an isfield default; 0
     # skips the season-level concat step (per-frame/per-segment products are
-    # still produced). Set to 1 if you want concatenated season outputs.
+    # still produced). Set to 1 if you want concatenated season outputs (also
+    # forces csv_en=1, since concat reads the CSV files).
     concat_en: 0
+    # All post _en flags default to FALSE in post.m, so without explicit values
+    # the per-segment loop visits every segment but produces nothing. Flip to 1
+    # to enable each product type; left explicit so they're easy to toggle.
+    pdf_en: 1        # bundled PDF per frame at <post_path>/pdf/<day_seg>/
+    echo_en: 1       # echogram JPG (the radargram page in each PDF)
+    layers_en: 1     # layer overlays on the echogram
+    maps_en: 0       # segment map JPG; needs basemap GIS data, skipped for now
+    csv_en: 0        # per-frame CSV (lat/lon/surface/bottom); data-delivery
+    data_en: 0       # bulk data products (.nc/.mat copies); data-delivery
   analysis_noise: {}  # TODO
