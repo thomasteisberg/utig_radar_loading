@@ -61,6 +61,15 @@ params:
     Vpp_scale: 1                          # full-scale Vpp; refine when calibrated
     lever_arm_fh: "@lever_arm_ORCA"       # see orca/matlab/lever_arm_ORCA.m (stub returning zeros)
     size: 1                               # 1 board
+    # Sample format overrides for v425 (added on thatcher/v425-flexible-
+    # sample-format branch of opr). v425's UTIG defaults are int16 real,
+    # 4 ADC/board; ORCA writes fc32 complex baseband, single channel.
+    # data_load.m reads these via wfs.{complex,sample_type,sample_size,
+    # adc_per_board}, used in byte-stride math and the typecast.
+    complex: 1                            # I/Q interleaved (fc32)
+    sample_type: "'single'"               # float32 typecast
+    sample_size: 4                        # bytes per real or imag float
+    adc_per_board: 1                      # single RX channel
     deconv.en: 0                          # no waveform deconvolution
     adcs: "[1]"                           # single ADC, index 1
     DDC_dec: 1                            # no software DDC (SDR does it in HW)
