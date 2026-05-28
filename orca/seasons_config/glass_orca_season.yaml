@@ -130,6 +130,11 @@ params:
     pdf_en: 1        # bundled PDF per frame at <post_path>/pdf/<day_seg>/
     echo_en: 1       # echogram JPG (the radargram page in each PDF)
     layers_en: 1     # layer overlays on the echogram
+    # publish_echogram requires echo.elev_comp (no internal default).
+    # 0 = no compensation, raw TWTT display (simplest, works without surface).
+    # 1 = relative elevation comp (airborne; uses Elevation).
+    # 2 = surface-flatten (needs echo.depth and a clean surface layer).
+    echo.elev_comp: 0
     maps_en: 0       # segment map JPG; needs basemap GIS data, skipped for now
     csv_en: 0        # per-frame CSV (lat/lon/surface/bottom); data-delivery
     data_en: 0       # bulk data products (.nc/.mat copies); data-delivery
