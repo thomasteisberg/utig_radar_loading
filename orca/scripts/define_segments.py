@@ -18,16 +18,27 @@ from opr_ingest.orca import file_index, gps_pipeline, headers, radar_config, seg
 # marked 'do not process' so the run scripts skip them.
 MIN_GPS_POINTS = 2
 
+# Minimum along-track motion (bbox diagonal in meters) for SAR / along-track
+# stages to have anything to work with. Stationary recordings (start/end-of-day
+# tests) have ~0 m extent and crash sar_coord_task ("Interpolation requires at
+# least two sample points" with diagnostic "In 0 - 0 m === Out 0 - 0 m"). 100 m
+# is conservative — clearly catches stationary, keeps any real transect.
+MIN_PATH_METERS = 100
+
 
 def gps_coverage_dnp_reason(gps_path, rx_samps_path) -> str:
     """Empty string if OPR can sync GPS for this recording, else a DNP reason.
 
-    Pre-empts the two records_create_sync_gps failures we hit on marginal/short
-    ORCA recordings, by replicating its checks against the radar comp_time
-    window (from headers.get_header_information):
+    Pre-empts the failures we hit downstream in records_create_sync_gps and
+    SAR's sar_coord_task by replicating their requirements against the GPS log
+    and the radar comp_time window (from headers.get_header_information):
 
-      * < MIN_GPS_POINTS usable fixes inside the radar window -> interp1
-        'requires at least two sample points'.
+      * < MIN_GPS_POINTS usable GPS fixes total (empty / no-3D-fix recordings).
+      * Stationary recording (bbox extent < MIN_PATH_METERS) -> SAR's interp1
+        on along_track errors with "two sample points" + the diagnostic
+        "In 0 - 0 m === Out 0 - 0 m".
+      * < MIN_GPS_POINTS usable fixes inside the radar window -> OPR's
+        records_create_sync_gps interp1 'requires at least two sample points'.
       * radar window not bracketed by GPS coverage -> OPR interpolates with
         interp1(...,NaN) (no extrapolation), producing NaN lat/lon/attitude and
         a `keyboard` halt.
@@ -38,6 +49,9 @@ def gps_coverage_dnp_reason(gps_path, rx_samps_path) -> str:
     comp = gps_pipeline.valid_gps_comp_times(gps_path)
     if len(comp) < MIN_GPS_POINTS:
         return f"only {len(comp)} valid GPS fix(es) < {MIN_GPS_POINTS}"
+    extent_m = gps_pipeline.gps_path_extent_meters(gps_path)
+    if extent_m < MIN_PATH_METERS:
+        return f"stationary recording: {extent_m:.1f} m extent < {MIN_PATH_METERS} m"
     try:
         radar_comp = headers.get_header_information(rx_samps_path)["comp_time"]
     except Exception as e:

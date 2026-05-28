@@ -54,6 +54,35 @@ def count_valid_gps_points(gps_path: Union[str, Path]) -> int:
     return len(valid_gps_comp_times(gps_path))
 
 
+def gps_path_extent_meters(gps_path: Union[str, Path]) -> float:
+    """Bounding-box diagonal of the recording's usable GPS fixes, in meters.
+
+    ~0 indicates a stationary recording (the start/end-of-day tests). SAR's
+    `sar_coord_task` errors out with `interp1` complaining about <2 sample
+    points when along-track distance is zero ("In 0 - 0 m === Out 0 - 0 m"
+    diagnostic). bbox diagonal is the right rough metric — it tracks the
+    *effective* aperture rather than total path length, so an out-and-back
+    walk doesn't fool it. Uses local flat-earth approximation; fine for the
+    stationary-vs-moving decision.
+    """
+    try:
+        df = load_and_parse_gpspipe_file(gps_path)
+    except Exception:
+        return 0.0
+    if df.empty:
+        return 0.0
+    if "mode" in df.columns:
+        df = df[df["mode"] >= 3]
+    df = df.dropna(subset=[c for c in ["LAT", "LON"] if c in df.columns])
+    if len(df) < 2 or "LAT" not in df.columns or "LON" not in df.columns:
+        return 0.0
+    lat = df["LAT"].to_numpy(dtype=float)
+    lon = df["LON"].to_numpy(dtype=float)
+    dlat_m = (lat.max() - lat.min()) * 111_000.0
+    dlon_m = (lon.max() - lon.min()) * 111_000.0 * float(np.cos(np.radians(lat.mean())))
+    return float(np.hypot(dlat_m, dlon_m))
+
+
 def generate_gps_file(
     gpspipe_paths: List[Union[str, Path]],
     output_path: Union[str, Path],
