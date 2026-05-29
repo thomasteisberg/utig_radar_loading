@@ -169,6 +169,11 @@ params:
     # surface to 1500 m below. Adjust the +1500 to actual target ice thickness
     # if needed (e.g. +3500 for thicker ice).
     echo.depth: "'[min(Surface_Depth)-5 max(Surface_Depth)+1500]'"
+    # echo.caxis is a NORMALIZED [0,1] percentile pair, NOT absolute dB.
+    # publish_echogram (line ~735) sorts the echogram values and picks
+    # caxis bounds at these percentiles, so [0.05 0.99] = clip the
+    # darkest 5% and brightest 1% — standard radargram contrast.
+    echo.caxis: "[0.05 0.99]"
     maps_en: 0       # segment map JPG; needs basemap GIS data, skipped for now
     csv_en: 0        # per-frame CSV (lat/lon/surface/bottom); data-delivery
     data_en: 0       # bulk data products (.nc/.mat copies); data-delivery
