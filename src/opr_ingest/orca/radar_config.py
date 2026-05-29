@@ -26,9 +26,17 @@ def load_radar_params(config_path: Union[str, Path]) -> dict:
         prf       : float  raw pulse repetition frequency [Hz] = 1/pulse_rep_int
         Tpd       : float  pulse / chirp duration [s] = GENERATE.chirp_length
         presums   : int    CHIRP.num_presums
-        f0, f1    : float  RF chirp band edges [Hz]:
-                           RF<n>.freq + RF<n>.lo_offset
-                             + GENERATE.lo_offset_sw  -/+  chirp_bandwidth/2
+        f0, f1    : float  Baseband chirp band edges [Hz]:
+                           GENERATE.lo_offset_sw  -/+  chirp_bandwidth/2
+                           These describe the band of frequencies present
+                           in the digitized stream, not the RF carrier.
+                           ORCA's USRP B205mini DDCs to baseband in
+                           hardware before we get the samples, so the
+                           chirp lives near 0 Hz (offset by lo_offset_sw)
+                           and OPR's matched filter must be built there.
+                           Using RF f0/f1 here yields a matched filter
+                           at hundreds of MHz against a baseband signal
+                           → no pulse compression, fast-time smearing.
         num_sam   : int    samples per record = round(fs * CHIRP.rx_duration)
     """
     cfg_path = Path(config_path)
@@ -54,10 +62,16 @@ def load_radar_params(config_path: Union[str, Path]) -> dict:
     Tpd = float(generate["chirp_length"])
     presums = int(chirp.get("num_presums", 1))
 
-    rf_center = float(rf["freq"]) + float(rf["lo_offset"]) + float(generate["lo_offset_sw"])
+    # OPR's wfs.f0/f1 describe the band that's actually present in the
+    # digitized samples (used to build the matched filter). For ORCA the
+    # data is complex baseband (USRP DDCs to ~0 around RF.freq+RF.lo_offset
+    # before writing), so the chirp lives at lo_offset_sw +/- chirp_bw/2,
+    # NOT at the RF carrier. Verified against the diagnostic script's
+    # clean pulse compression on 20251204_224207 (see CLAUDE.md note).
+    lo_offset_sw = float(generate["lo_offset_sw"])
     half_bw = float(generate["chirp_bandwidth"]) / 2.0
-    f0 = rf_center - half_bw
-    f1 = rf_center + half_bw
+    f0 = lo_offset_sw - half_bw
+    f1 = lo_offset_sw + half_bw
 
     num_sam = int(round(fs * float(chirp["rx_duration"])))
 

@@ -58,8 +58,10 @@ params:
     # define_segments.py via opr_ingest.orca.radar_config.load_radar_params):
     fs: ~                # RF<n>.rx_rate
     prf: ~               # 1 / CHIRP.pulse_rep_int
-    f0: ~                # RF<n>.freq + RF<n>.lo_offset + GENERATE.lo_offset_sw - chirp_bandwidth/2
-    f1: ~                # RF<n>.freq + RF<n>.lo_offset + GENERATE.lo_offset_sw + chirp_bandwidth/2
+    f0: ~                # baseband chirp low edge:  GENERATE.lo_offset_sw - chirp_bandwidth/2
+    f1: ~                # baseband chirp high edge: GENERATE.lo_offset_sw + chirp_bandwidth/2
+                         # (not RF — USRP DDCs to ~0 Hz before writing,
+                         # so the matched filter must be built at baseband.)
     Tpd: ~               # GENERATE.chirp_length
     presums: ~           # CHIRP.num_presums
     # Static across all current SORA recordings (B205mini, single-channel):
