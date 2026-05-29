@@ -19,7 +19,7 @@ orca_gps_base_dir: "/kucresis/scratch/tchamberlin_sta/opr_user_tmp/gps"  # TODO:
 
 # Base directories for outputs (season name is appended automatically)
 gps_support_base_dir: "outputs/gps"  # UTIG only
-header_base_dir: "outputs/headers/rds"
+header_base_dir: "/cresis/dataproducts/opr_data/opr_tmp/headers/rds"
 params_output_base_dir: "outputs/params"
 maps_output_base_dir: "outputs/maps"
 
