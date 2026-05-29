@@ -19,6 +19,12 @@ params:
     # 425 is the UTIG file.version; ORCA reuses the UTIG ingest schema until OPR
     # adds an ORCA-specific reader.
     file.version: 425
+    # v425 defaults to big-endian in data_load.m (UTIG MARFA/HICARS legacy);
+    # ORCA's USRP B205mini writes native x86 little-endian fc32, so override
+    # here. Without this, every float32 byte-flips and the typecast yields
+    # NaN/Inf bit patterns — symptom is qlook Data all zeros after coh-noise
+    # subtraction collapses what's left.
+    file.endian: "'little'"
     file.boards: "{''}"
     file.start_idx: 1
     file.stop_idx: 1
