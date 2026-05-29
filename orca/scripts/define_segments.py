@@ -134,7 +134,7 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
     # Per-segment radar params from each segment's first recording's _config.yaml.
     # ORCA configs vary across recordings (rx_duration, num_presums, possibly
     # sample rate and RF center), so these can't live in the yaml as scalars.
-    radar_keys = ("fs", "prf", "f0", "f1", "Tpd", "presums")
+    radar_keys = ("fs", "prf", "f0", "f1", "Tpd", "presums", "DDC_freq")
     per_segment_radar = {k: [] for k in radar_keys}
     for (date_str, seg_num) in segments:
         grp = grouped.get_group((date_str, seg_num)).sort_values("start_timestamp")

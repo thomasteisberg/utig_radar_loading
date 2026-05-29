@@ -58,10 +58,14 @@ params:
     # define_segments.py via opr_ingest.orca.radar_config.load_radar_params):
     fs: ~                # RF<n>.rx_rate
     prf: ~               # 1 / CHIRP.pulse_rep_int
-    f0: ~                # baseband chirp low edge:  GENERATE.lo_offset_sw - chirp_bandwidth/2
-    f1: ~                # baseband chirp high edge: GENERATE.lo_offset_sw + chirp_bandwidth/2
-                         # (not RF — USRP DDCs to ~0 Hz before writing,
-                         # so the matched filter must be built at baseband.)
+    f0: ~                # RF chirp low edge:  RF.freq + RF.lo_offset + GENERATE.lo_offset_sw - chirp_bandwidth/2
+    f1: ~                # RF chirp high edge: RF.freq + RF.lo_offset + GENERATE.lo_offset_sw + chirp_bandwidth/2
+                         # OPR uses fc=(f0+f1)/2 for lambda=c/fc in SAR
+                         # synthetic-aperture math; setting fc=0 (baseband)
+                         # gives lambda=Inf -> Inf cluster cpu_time/mem
+                         # estimates. f0/f1 stay at RF; DDC_freq below
+                         # tells OPR's pulse_compress to shift the
+                         # baseband-sampled data into RF-labeled bins.
     Tpd: ~               # GENERATE.chirp_length
     presums: ~           # CHIRP.num_presums
     # Static across all current SORA recordings (B205mini, single-channel):
@@ -80,8 +84,14 @@ params:
     adc_per_board: 1                      # single RX channel
     deconv.en: 0                          # no waveform deconvolution
     adcs: "[1]"                           # single ADC, index 1
-    DDC_dec: 1                            # no software DDC (SDR does it in HW)
-    DDC_freq: 0
+    DDC_dec: 1                            # no software DDC (SDR did it in HW)
+    DDC_freq: ~                           # filled per-segment by define_segments.py
+                                          # = RF.freq + RF.lo_offset (the SDR's LO).
+                                          # Tells OPR what RF carrier was mixed down,
+                                          # so freq_pc gets RF labels and the
+                                          # pulse_compress mask aligns the
+                                          # baseband-sampled chirp with the
+                                          # RF-coded BW_window.
     tukey: 0.1
     BW_window: ~                          # left null; OPR should infer from f0/f1
     ft_wind: "@(N)tukeywin(N,0.2)"
