@@ -146,6 +146,12 @@ params:
     # ops.location used by run_all_create_track_files for the output filename
     # `tracks_<location>_<radar>_<season>.mat`.
     ops.location: "'antarctic'"
+    # data_dirs is a CELL of folder names post reads Data_*.mat from. Default
+    # in post.m is {'qlook'} -> CSARP_qlook (incoherent product). To post the
+    # SAR-focused product, point at the array stage's output folder, which
+    # matches array.method (currently 'standard' -> CSARP_standard). Sequence
+    # to get SAR-focused PDFs: records -> qlook -> sar -> array -> post.
+    data_dirs: "{'standard'}"
     # concat_en read by run_post_UTIG line 149 without an isfield default; 0
     # skips the season-level concat step (per-frame/per-segment products are
     # still produced). Set to 1 if you want concatenated season outputs (also
