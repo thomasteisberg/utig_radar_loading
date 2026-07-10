@@ -1,4 +1,6 @@
-
+season_name: "2016_Antarctica_BaslerJKB"
+postprocessed_gps_dir: "/resfs/GROUPS/CRESIS/dataproducts/metadata/2016_Antarctica_BaslerJKB/gps"
+datasets: ["UTIG1"]
 
 # Defaults for generating parameter spreadsheet tabs
 params:
@@ -103,7 +105,7 @@ params:
     layer_dir: "layer"
     maps_en: 1
     echo_en: 1
-    layers: "[struct('name', 'surface', 'source', 'layerdata')]"
+    layers: "[struct('name','surface','source','layerdata','existence_check',true) struct('name','bottom','source','layerdata','existence_check',false)]"
     layers_en: 1
     data_en: ~
     csv_en: 1
