@@ -1,3 +1,9 @@
+###
+# 2025 GLASS Project radar processing configuration
+# - 10 days of radar tracks on Union Glacier at Constellation Inlet
+# - SORA radar unit (Sled-borne Orca RAdar) towed by snowmachine
+###
+
 season_name: "2025_Antarctica_ORCA"
 datasets: ["ORCA"]
 
@@ -48,8 +54,41 @@ params:
     motion_comp: 0
     dec: 10
     inc_dec: 5
-    surf.en: 1
-    surf.profile: "RDS_OIB"
+    # surf.en/method/fixed_value are qlook's INLINE surface tracking
+    # (runs mid-task inside qlook_combine_task.m, before Data_*.mat is
+    # fully written). Confirmed broken for this pipeline: 'fixed' via this
+    # path returns Surface=NaN for 100% of records on every segment tested
+    # (verified directly against CSARP_qlook output), even though the same
+    # 'fixed' tracker logic works correctly when run standalone against a
+    # finished Data_*.mat (see run_layer_tracker_UTIG.m). Root cause not
+    # fully pinned (likely a not-yet-populated GPS_time/Latitude/etc. state
+    # at the point qlook_combine_task.m calls the tracker inline), but the
+    # standalone path sidesteps it entirely, so: leave surf.en=0 here and
+    # get Surface from run_layer_tracker_UTIG.m's '%% RDS: Fixed Surface'
+    # block (param.layer_tracker.track) instead, run as a separate stage
+    # after qlook, before sar/array/post. That block's track.fixed_value
+    # must be kept in sync with the derivation below.
+    surf.en: 0
+    surf.method: "'fixed'"
+    # track.fixed_value is a BIN INDEX, NOT a TWTT in seconds --
+    # layer_tracker_task.m's 'fixed' branch sets new_layers = fixed_value
+    # directly, then interp1(1:length(mdata.Time), mdata.Time, new_layer +
+    # min_min_bin - 1) converts it to TWTT. This value is UNUSED while
+    # surf.en=0 above -- kept only so the derivation stays next to the yaml
+    # value that used to consume it. The value actually driving Surface
+    # today is run_layer_tracker_UTIG.m's track.fixed_value (year==2025
+    # block, '%% RDS: Fixed Surface') -- keep that in sync with this number.
+    #
+    # Originally 165 (direct-path reflection at 0-based sample 164 via a
+    # separate Python pulse-compression pass on raw IQ, +1 for MATLAB's
+    # 1-based convention). After radar.Tsys was set to 2.92119e-6 s
+    # (2026-07-20) to compensate coax/RF-chain delay, that same delay is now
+    # applied during pulse compression (data_load_wfs.m), so it must not
+    # also be counted here: new value = round(165 - Tsys*fs)
+    # = round(165 - 2.92119e-6*56e6) = round(165 - 163.6) = 1. The ~0.4
+    # sample remainder corresponds to the ~2 m antenna-height offset
+    # deliberately left out of Tsys.
+    surf.fixed_value: 1
     resample: "[1 1]"
     radiometric_corr_dB: ~
 
@@ -102,7 +141,7 @@ params:
     adc_gains_dB: "[0]"                   # absolute gains TBD; 0 = no compensation
     chan_equal_dB: "[0]"
     chan_equal_deg: "[0]"
-    Tsys: "[0]"
+    Tsys: "[2.92119e-6]"
     bit_shifts: "[0]"
     Tadc_adjust: 0
     Tadc: 0
@@ -147,11 +186,22 @@ params:
     # `tracks_<location>_<radar>_<season>.mat`.
     ops.location: "'antarctic'"
     # data_dirs is a CELL of folder names post reads Data_*.mat from. Default
-    # in post.m is {'qlook'} -> CSARP_qlook (incoherent product). To post the
-    # SAR-focused product, point at the array stage's output folder, which
-    # matches array.method (currently 'standard' -> CSARP_standard). Sequence
-    # to get SAR-focused PDFs: records -> qlook -> sar -> array -> post.
-    data_dirs: "{'standard'}"
+    # in post.m is {'qlook'} -> CSARP_qlook (incoherent product).
+    # IMPORTANT: post.m only ever builds PDFs/echograms from data_dirs{1}
+    # (the "master") -- see post.m's own comment: "The first is the master
+    # and will be used to create the jpg/pdf images." Any other entries in
+    # the list only feed the data_en bulk-copy loop (raw Data_*.mat copied
+    # into CSARP_post), NOT a second set of echogram/PDF images. So this is
+    # NOT a way to get both qlook and SAR echograms in one post.m run.
+    # {'standard','qlook'} matches OPR's documented single-channel
+    # convention: 'standard' (array/SAR output, CSARP_standard) is the
+    # master -> SAR-focused PDFs/echograms, and 'qlook' Data_*.mat still
+    # gets bulk-copied in via data_en. To get actual qlook echogram/PDF
+    # images too, rerun post.m a second time with data_dirs={'qlook'} and a
+    # different post.out_path (e.g. 'post_qlook'), producing a separate
+    # CSARP_post_qlook tree -- deferred for now, needs a second xlsx/params
+    # variant to drive that second post.m pass.
+    data_dirs: "{'standard','qlook'}"
     # concat_en read by run_post_UTIG line 149 without an isfield default; 0
     # skips the season-level concat step (per-frame/per-segment products are
     # still produced). Set to 1 if you want concatenated season outputs (also
@@ -162,12 +212,17 @@ params:
     # to enable each product type; left explicit so they're easy to toggle.
     pdf_en: 1        # bundled PDF per frame at <post_path>/pdf/<day_seg>/
     echo_en: 1       # echogram JPG (the radargram page in each PDF)
-    layers_en: 0     # layer overlays on the echogram
+    layers_en: 1     # layer overlays on the echogram
+    # post copies ONLY the layers listed here into CSARP_post/CSARP_layer.
+    # 'bottom' is included (existence_check false, since it is an all-NaN
+    # placeholder for manual picking) so imb.picker sees it when its
+    # layerdata source is set to 'CSARP_post/layer' rather than 'layer'.
+    layers: "[struct('name','surface','source','layerdata','existence_check',true) struct('name','bottom','source','layerdata','existence_check',false)]"
     # publish_echogram requires echo.elev_comp (no internal default).
     # 0 = no compensation, raw TWTT display (simplest, works without surface).
     # 1 = relative elevation comp (airborne; uses Elevation).
     # 2 = surface-flatten (needs echo.depth and a clean surface layer).
-    echo.elev_comp: 0
+    echo.elev_comp: 3
     # echo.depth is a MATLAB string expression `eval()`'d in publish_echogram
     # to set the y-axis depth range in meters relative to Surface_Depth.
     # Used regardless of elev_comp (line 420 of publish_echogram, in the general
@@ -179,9 +234,14 @@ params:
     # caxis bounds at these percentiles, so [0.05 0.99] = clip the
     # darkest 5% and brightest 1% — standard radargram contrast.
     echo.caxis: "[0.05 0.99]"
-    echo.depth: "'[min(Surface_Depth)-5 max(Surface_Depth)+2000]'"
+    
+    # for echo.elev_comp = 0 or 2, use Surface_Depth
+    # echo.depth: "'[min(Surface_Depth)-5 max(Surface_Depth)+2000]'"
+    # for echo.elev_comp = 3, use SurfaceElev
+    echo.depth: "'[min(Surface_Elev)-2000 max(Surface_Elev)+200]'"
+
     maps_en: 0       # segment map JPG; needs basemap GIS data, skipped for now
-    csv_en: 0        # per-frame CSV (lat/lon/surface/bottom); data-delivery
-    data_en: 0       # bulk data products (.nc/.mat copies); data-delivery
+    csv_en: 1        # per-frame CSV (lat/lon/surface/bottom); data-delivery
+    data_en: 1       # bulk data products (.nc/.mat copies); data-delivery
     echo.caxis: "[0.05 0.99]"
   analysis_noise: {}  # TODO
