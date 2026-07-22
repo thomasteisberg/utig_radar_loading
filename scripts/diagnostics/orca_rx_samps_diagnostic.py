@@ -25,7 +25,7 @@ This script makes that visible:
      this is the "what qlook *should* look like" baseline.
 
 Usage:
-    uv run scripts/orca_rx_samps_diagnostic.py <prefix-or-rx-samps-path>
+    uv run scripts/diagnostics/orca_rx_samps_diagnostic.py <prefix-or-rx-samps-path>
        [--n-records 500] [--save-dir outputs/diagnostics] [--no-show]
 
 `<prefix-or-rx-samps-path>` can be either a recording prefix
