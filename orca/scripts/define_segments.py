@@ -12,6 +12,11 @@ import yaml
 
 from opr_ingest.orca import file_index, gps_pipeline, headers, radar_config, segment_splits
 
+import holoviews as hv
+
+from opr_ingest.core import basemap, geo
+from opr_ingest.orca.gpspipe_gps import load_and_parse_gpspipe_file
+
 # Minimum usable GPS fixes for a segment to be processable. OPR's
 # records_create_sync_gps interp1 needs >= 2 points inside the radar window;
 # segments below this (e.g. early ground/calibration runs with no 3D fix) are
@@ -221,11 +226,7 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
 
 def generate_map(df_season, season_name, output_dir):
     """Render an interactive HTML map of ORCA segments over the Antarctica basemap."""
-    import holoviews as hv
-
-    from opr_ingest.core import basemap, geo
-    from opr_ingest.orca.gpspipe_gps import load_and_parse_gpspipe_file
-
+    
     hv.extension("bokeh")
 
     segment_dfs = []
