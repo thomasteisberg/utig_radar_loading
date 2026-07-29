@@ -175,7 +175,10 @@ def generate_csvs(df_season: pd.DataFrame, season_config: dict, user_config: dic
         if reasons:
             # Marked DNP: OPR's run scripts filter cmd.notes on 'do not process'
             # (case-insensitive regexp), so these are skipped automatically.
-            return f"do not process ({reasons[0]}): {prefixes}"
+            # Dedupe, preserving start_timestamp order, so N recordings failing
+            # the same check don't repeat the reason N times.
+            reasons = list(dict.fromkeys(reasons))
+            return f"do not process ({'; '.join(reasons)}): {prefixes}"
         return prefixes
 
     file_prefix = grouped.apply(file_prefix_per_segment, include_groups=False)
