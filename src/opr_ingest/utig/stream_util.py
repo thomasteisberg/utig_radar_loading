@@ -3,10 +3,16 @@ import warnings
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import astropy.time
 import numpy as np
 import pandas as pd
 
 from opr_ingest.core.epochs import UNIX_EPOCH, GPS_EPOCH, NI_EPOCH
+
+# GPS = TAI - 19 s (fixed by definition), so TAI-UTC = (GPS-UTC) + 19.
+GPS_TAI_OFFSET_S = 19
+# Continuous SI seconds between the NI/LabVIEW epoch and the GPS epoch.
+NI_TO_GPS_EPOCH_S = (GPS_EPOCH - NI_EPOCH).total_seconds()
 
 #
 # This file contains methods for parsing data from UTIG data files of various kinds.
@@ -317,12 +323,15 @@ def parse_GPSnc1(df):
     (continuous SI seconds with no leap second adjustments) as seconds
     since the NI/LabVIEW epoch (1904-01-01 00:00:00).
 
-    The card also reports ``utc_offset``, which is TAI-UTC (the cumulative
-    number of leap seconds). Since GPS = TAI - 19s (a fixed constant),
-    the GPS-UTC offset is ``(utc_offset - 19)`` seconds.
-
-    This function converts from GPS time to ANSI-C time (POSIX seconds
-    since 1970-01-01 00:00:00 UTC) by subtracting the GPS-UTC offset.
+    The GPS->UTC conversion uses astropy's leap-second table, keyed on the
+    timestamp itself, rather than the card's ``utc_offset`` field. The card
+    reports ``utc_offset`` (TAI-UTC) as 19 -- its power-on default, i.e.
+    GPS-UTC = 0 -- until it decodes the leap-second count from the GPS almanac,
+    and those stale rows can be the majority of a file (or all of it). Trusting
+    them leaves part of the file 18 s ahead of the rest, which makes GPS_TIME
+    non-monotonic and scrambles the GPS_TIME -> RADAR_TIME mapping downstream.
+    Leap seconds are a known function of date, so astropy is authoritative and
+    the field is only used as a cross-check.
     """
     df = df.copy()
 
@@ -339,17 +348,28 @@ def parse_GPSnc1(df):
     # Step 1: NI/LabVIEW seconds since 1904-01-01, in GPS time scale
     ni_seconds = df['gps_time'].astype('int64') + df['gps_subsecs'].astype('uint64') / (2**64)
 
-    # Step 2: Convert to datetime in GPS time scale
-    # (pandas treats every day as 86400s, matching the GPS convention)
-    gps_datetime = NI_EPOCH + pd.to_timedelta(ni_seconds, unit='s')
+    # Step 2: Re-reference to the GPS epoch. Both epochs are counted in continuous
+    # SI seconds on the GPS scale, so this is a plain constant offset.
+    gps_seconds = ni_seconds - NI_TO_GPS_EPOCH_S
 
-    # Step 3: Convert GPS datetime to UTC datetime
-    # utc_offset is TAI-UTC (leap seconds); GPS-UTC = utc_offset - 19
-    gps_utc_offset_s = df['utc_offset'] - 19
-    utc_datetime = gps_datetime - pd.to_timedelta(gps_utc_offset_s, unit='s')
+    # Step 3: GPS -> UTC via astropy's leap-second table (ANSI-C / POSIX seconds)
+    df['GPS_TIME'] = astropy.time.Time(gps_seconds.values, format='gps').utc.unix
 
-    # Step 4: ANSI-C time (seconds since 1970-01-01 00:00:00 UTC)
-    df['GPS_TIME'] = (utc_datetime - UNIX_EPOCH) / pd.Timedelta('1s')
+    # Cross-check the card's reported TAI-UTC against the authoritative value.
+    # Disagreement means the card had not yet decoded the leap-second count.
+    if 'utc_offset' in df.columns:
+        gps_scale_unix = (NI_EPOCH + pd.to_timedelta(ni_seconds, unit='s') - UNIX_EPOCH) / pd.Timedelta('1s')
+        tai_utc = np.round(gps_scale_unix - df['GPS_TIME'] + GPS_TAI_OFFSET_S).astype('int64')
+        stale = df['utc_offset'] != tai_utc
+        if stale.any():
+            reported = sorted(set(df.loc[stale, 'utc_offset'].tolist()))
+            warnings.warn(
+                f"GPSnc1: {int(stale.sum())} of {len(df)} rows report utc_offset "
+                f"{reported}, but the correct TAI-UTC for these timestamps is "
+                f"{sorted(set(tai_utc[stale].tolist()))}; the timing card had not yet "
+                f"decoded the leap-second count. Ignoring the field (astropy is authoritative).",
+                stacklevel=2,
+            )
 
     return df
 
