@@ -1,12 +1,25 @@
 # Base paths for raw UTIG field data
 raw_data_base_path: "/kucresis/scratch/data/UTIG"
 
-# File index cache (speeds up repeated runs)
+# Base path for raw ORCA recordings (flat folders of YYYYMMDD_HHMMSS-prefixed
+# files: *_rx_samps.bin / *_config.yaml / *_uhd_stdout.log / *_gpspipe_stdout.log)
+orca_raw_data_base_path: "/cresis/data2/MIT/"
+
+# File index caches (speed up repeated runs; separate per dataset since the
+# UTIG and ORCA indexes have different schemas)
 file_index_cache: "outputs/file_index.csv"
+orca_file_index_cache: "outputs/orca_file_index.csv"
+
+# Base dir for ORCA GPS .mat files. MUST be absolute and writable by you:
+# define_segments writes records.csv gps.fn as <orca_gps_base_dir>/<season>/
+# gps_<seg>.mat, and OPR loads absolute paths directly. A relative path would
+# be resolved against the shared (often read-only) gRadar.support_path. Point
+# this at your own scratch (parallels header_base_dir).
+orca_gps_base_dir: "/kucresis/scratch/tchamberlin_sta/opr_user_tmp/gps"  # TODO: confirm your scratch
 
 # Base directories for outputs (season name is appended automatically)
-gps_support_base_dir: "/resfs/GROUPS/CRESIS/dataproducts/opr_support/gps"
-header_base_dir: "/kucresis/scratch/tteisberg_sta/scripts/opr_user_tmp/headers/rds"
+gps_support_base_dir: "outputs/gps"  # UTIG only
+header_base_dir: "/cresis/dataproducts/opr_data/opr_tmp/headers/rds"
 params_output_base_dir: "outputs/params"
 maps_output_base_dir: "outputs/maps"
 

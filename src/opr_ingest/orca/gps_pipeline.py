@@ -1,0 +1,166 @@
+"""End-to-end GPS .mat generation pipeline for ORCA segments.
+
+Wraps the ORCA gpspipe loader with the shared OPR GPS .mat builder. ORCA
+has no separate radar hardware clock — UHD drives the B-Series radio off
+the host wall clock — so `RADAR_TIME` is set equal to `COMP_TIME` (the
+host's Unix-time stamps from the gpspipe line prefixes). Per-pulse radar
+times in the header file are derived in the same timebase from the UHD
+log's `[START]` + PRI math, so the GPS and header files share one radar
+clock.
+"""
+
+import warnings
+from pathlib import Path
+from typing import List, Optional, Union
+
+import numpy as np
+import pandas as pd
+
+from opr_ingest.core.opr_gps_matlab import (
+    create_gps_matlab_structure,
+    merge_position_files,
+    save_gps_matlab_file,
+)
+from opr_ingest.orca.gpspipe_gps import load_and_parse_gpspipe_file
+from opr_ingest.orca.uhd_log import parse_start_timestamp
+
+
+def valid_gps_comp_times(gps_path: Union[str, Path]) -> np.ndarray:
+    """COMP_TIME (host Unix seconds) of usable GPS fixes in a gpspipe log.
+
+    Mirrors the filtering ``generate_gps_file`` applies (3D-fix ``mode >= 3``
+    plus non-NaN position/time), so Stage 1 can predict the GPS coverage OPR
+    will actually have. Returns an empty array if the log is missing,
+    unparseable, or has no usable fixes. Keep this filter in sync with
+    generate_gps_file.
+    """
+    try:
+        df = load_and_parse_gpspipe_file(gps_path)
+    except Exception:
+        return np.array([], dtype=float)
+    if df.empty:
+        return np.array([], dtype=float)
+    if "mode" in df.columns:
+        df = df[df["mode"] >= 3]
+    subset = [c for c in ["GPS_TIME", "COMP_TIME", "LAT", "LON"] if c in df.columns]
+    df = df.dropna(subset=subset)
+    if "COMP_TIME" not in df.columns:
+        return np.array([], dtype=float)
+    return df["COMP_TIME"].to_numpy(dtype=float)
+
+
+def count_valid_gps_points(gps_path: Union[str, Path]) -> int:
+    """Number of usable GPS fixes a recording's gpspipe log would contribute."""
+    return len(valid_gps_comp_times(gps_path))
+
+
+def gps_path_extent_meters(gps_path: Union[str, Path]) -> float:
+    """Bounding-box diagonal of the recording's usable GPS fixes, in meters.
+
+    ~0 indicates a stationary recording (the start/end-of-day tests). SAR's
+    `sar_coord_task` errors out with `interp1` complaining about <2 sample
+    points when along-track distance is zero ("In 0 - 0 m === Out 0 - 0 m"
+    diagnostic). bbox diagonal is the right rough metric — it tracks the
+    *effective* aperture rather than total path length, so an out-and-back
+    walk doesn't fool it. Uses local flat-earth approximation; fine for the
+    stationary-vs-moving decision.
+    """
+    try:
+        df = load_and_parse_gpspipe_file(gps_path)
+    except Exception:
+        return 0.0
+    if df.empty:
+        return 0.0
+    if "mode" in df.columns:
+        df = df[df["mode"] >= 3]
+    df = df.dropna(subset=[c for c in ["LAT", "LON"] if c in df.columns])
+    if len(df) < 2 or "LAT" not in df.columns or "LON" not in df.columns:
+        return 0.0
+    lat = df["LAT"].to_numpy(dtype=float)
+    lon = df["LON"].to_numpy(dtype=float)
+    dlat_m = (lat.max() - lat.min()) * 111_000.0
+    dlon_m = (lon.max() - lon.min()) * 111_000.0 * float(np.cos(np.radians(lat.mean())))
+    return float(np.hypot(dlat_m, dlon_m))
+
+
+def generate_gps_file(
+    gpspipe_paths: List[Union[str, Path]],
+    output_path: Union[str, Path],
+    output_path_temporary_df: Optional[Union[str, Path]] = None,
+    uhd_log_paths: Optional[List[Union[str, Path]]] = None,
+    gps_pad_time_s: float = 2,
+) -> pd.DataFrame:
+    """Build and save one OPR GPS .mat file from a set of ORCA gpspipe logs."""
+    merged_df = merge_position_files(
+        file_paths=gpspipe_paths,
+        load_function=load_and_parse_gpspipe_file,
+        time_sort_key="COMP_TIME",
+        remove_duplicates=True,
+    )
+    print(f"Merged {len(merged_df)} TPV records from {len(gpspipe_paths)} gpspipe file(s)")
+
+    merged_df["RADAR_TIME"] = merged_df["COMP_TIME"]
+
+    if uhd_log_paths:
+        comp_min = merged_df["COMP_TIME"].min()
+        comp_max = merged_df["COMP_TIME"].max()
+        for uhd_path in uhd_log_paths:
+            start_t = parse_start_timestamp(uhd_path)
+            if start_t is None:
+                warnings.warn(f"Could not find [START] in {uhd_path}")
+            elif not (comp_min <= start_t <= comp_max):
+                warnings.warn(
+                    f"UHD [START] {start_t:.3f} from {uhd_path} outside gpspipe "
+                    f"COMP_TIME range [{comp_min:.3f}, {comp_max:.3f}]"
+                )
+            else:
+                print(
+                    f"UHD [START] {start_t:.3f} from {Path(uhd_path).name} sits "
+                    f"{start_t - comp_min:.1f}s into gpspipe coverage "
+                    f"(span {comp_max - comp_min:.1f}s)"
+                )
+
+    if "mode" in merged_df.columns:
+        n_before = len(merged_df)
+        merged_df = merged_df[merged_df["mode"] >= 3].reset_index(drop=True)
+        if len(merged_df) < n_before:
+            print(f"Filtered out {n_before - len(merged_df)} rows with mode < 3 (no 3D fix)")
+
+    merged_df = merged_df.dropna(
+        subset=["GPS_TIME", "COMP_TIME", "RADAR_TIME", "LAT", "LON"]
+    ).reset_index(drop=True)
+    print(
+        f"Merged dataframe columns: {merged_df.columns.tolist()} "
+        f"(len: {len(merged_df)})"
+    )
+
+    if gps_pad_time_s and gps_pad_time_s > 0 and len(merged_df) >= 2:
+        entry_before = merged_df.iloc[0].copy()
+        entry_after = merged_df.iloc[-1].copy()
+        gps_span = merged_df["GPS_TIME"].iloc[-1] - merged_df["GPS_TIME"].iloc[0]
+        for t_key in ["GPS_TIME", "COMP_TIME", "RADAR_TIME"]:
+            t = merged_df[t_key]
+            dt_per_gps_time = (t.iloc[-1] - t.iloc[0]) / gps_span if gps_span > 0 else 1.0
+            entry_before[t_key] -= dt_per_gps_time * gps_pad_time_s
+            entry_after[t_key] += dt_per_gps_time * gps_pad_time_s
+        merged_df = pd.concat(
+            [pd.DataFrame([entry_before]), merged_df, pd.DataFrame([entry_after])],
+            ignore_index=True,
+        )
+
+    if output_path_temporary_df is not None:
+        output_path_temporary_df = Path(output_path_temporary_df)
+        output_path_temporary_df.parent.mkdir(parents=True, exist_ok=True)
+        merged_df.to_csv(output_path_temporary_df, index=False)
+        print(f"Saved merged dataframe to: {output_path_temporary_df}")
+
+    gps_struct = create_gps_matlab_structure(merged_df, source="ORCA_gpspipe")
+    save_gps_matlab_file(gps_struct, output_path)
+    print(f"Saved GPS file to: {output_path}")
+
+    print(f"GPS time range: {gps_struct['gps_time'][0, 0]:.2f} to {gps_struct['gps_time'][0, -1]:.2f}")
+    print(f"Lat range: {gps_struct['lat'].min():.6f} to {gps_struct['lat'].max():.6f}")
+    print(f"Lon range: {gps_struct['lon'].min():.6f} to {gps_struct['lon'].max():.6f}")
+    print(f"Elev range: {gps_struct['elev'].min():.2f} to {gps_struct['elev'].max():.2f} meters")
+
+    return merged_df
