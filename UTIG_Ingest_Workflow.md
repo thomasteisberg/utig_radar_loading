@@ -158,14 +158,14 @@ The recommended workflow is as follows:
 2. `run_analysis_UTIG.m`
 3. `run_collate_coh_noise_UTIG.m`
 4. `run_qlook_UTIG.m`
-5. `run_all_create_track_files.m`
+5. `run_all_create_track_files_UTIG.m`
 6. `run_layer_tracker_UTIG.m`
 
 For the layer tracker, run it using snake processing on the surface. Optionally (but highly recommended), run it a second time to copy the surface DEM for reference.
 
 At this stage, you should manually inspect some data using `imb.picker` and make sure it's looking reasonable.
 
-6. `run_check_surface.m`
+6. `run_check_surface_UTIG.m`
 
 Run check surface on a handful of segments. If needed, update Tadc_adjust following the instructions in `check_surface.m`. Get this part right before proceeding.
 

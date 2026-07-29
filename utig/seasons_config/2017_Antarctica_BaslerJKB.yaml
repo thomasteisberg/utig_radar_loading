@@ -1,4 +1,6 @@
-
+season_name: "2017_Antarctica_BaslerJKB"
+postprocessed_gps_dir: "/resfs/GROUPS/CRESIS/dataproducts/metadata/2017_Antarctica_BaslerJKB/gps"
+datasets: ["UTIG2"]
 
 # Defaults for generating parameter spreadsheet tabs
 params:
@@ -45,6 +47,25 @@ params:
     resample: "[2 1]"
     radiometric_corr_dB: ~
 
+  sar:
+    out_path: ~
+    imgs: "{[1 1;1 3],[1 2;1 4]}"
+    chunk_len: 5000
+    mocomp.en: 1
+    sigma_x: 2.5
+
+  array:
+    in_path: ~
+    out_path: ~
+    img_comb: "[4e-06 -Inf 1e-06]"
+    imgs: "{[1 1;1 3],[1 2;1 4]}"
+    method: "standard"
+    bin_rng: 0
+    line_rng: "[-10:10]"
+    dline: 11
+    ft_over_sample: ~
+    radiometric_corr_dB: ~
+
   radar:
     fs: 50000000
     prf: 6250
@@ -72,20 +93,35 @@ params:
     Tsys: "[-9.4526 24.29497 0 3.22272]*1e-9"
     presums: 32
     bit_shifts: "[0 0 0 0]"
-    Tadc_adjust: -1.2e-6
+    Tadc_adjust: -1.26e-6
     Tadc: 0
     gain_en: "[0 0 0 0]"
     coh_noise_method: "'analysis'"
 
+  post:
+    out_path: ~
+    data_dirs: "{'standard'}"
+    img: 0
+    layer_dir: "layer"
+    maps_en: 1
+    echo_en: 1
+    layers: "[struct('name','surface','source','layerdata','existence_check',true) struct('name','bottom','source','layerdata','existence_check',false)]"
+    layers_en: 1
+    data_en: ~
+    csv_en: 1
+    concat_en: 1
+    pdf_en: 1
+    map.location: "Antarctica"
+    map.type: "combined"
+    echo.elev_comp: 3
+    echo.depth: "[publish_echogram_switch(Bbad,0.25,Surface_Elev,-3500,DBottom,-100),max(Surface_Elev+100)]"
+    echo.er_ice: 3.15
+    ops.location: "antarctica"
 
-  # post:
-  #   ops.en: 0  # Disable OPS posting by default
-  #   ops.location: 'arctic' # or 'antarctic'
-  #   ops.layers: 'layers_2022_Antarctica_BaslerMKB.txt'
-  #   echo.en: 0
-  #   echo.threshold: -inf
-  #   echo.sidelobe: 15
-  #   echo.plots: 0
-  #   # TODO: Add other post fields as needed
-
-  # TODO: Add any mission-specific sheets/sections as needed
+  analysis_noise:
+    block_size: 10000
+    imgs: "{[1 1;1 3],[1 2;1 4]}"
+    size: 1
+    method: "coh_noise"
+    distance_weight: 1
+    block_ave: 1000

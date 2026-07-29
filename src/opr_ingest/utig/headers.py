@@ -10,12 +10,21 @@ import unfoc
 from opr_ingest.utig import stream_util
 
 
-def create_header_df(input_filename, waveform_record_length=6400):
+def create_header_df(input_filename, waveform_record_length=None):
     """Build the header DataFrame for one bxds file.
 
     Auto-detects stream type:
       - RADjh1 (HiCARS1): no per-record headers; offsets derived from file size.
       - RADnh3 / RADnh5:  use unfoc to index headers.
+
+    `waveform_record_length` is the byte length of one channel's waveform, used to
+    locate the second channel within each two-channel record. When None (default)
+    it is derived from the data: each RADnh3/RADnh5 sample is int16, so the
+    waveform is `nsamp * 2` bytes. Pass a value to override. (This was formerly
+    hardcoded to 6400 = 3200 samples, which is only correct when nsamp == 3200;
+    for nsamp != 3200 it mis-placed the second/even channel — e.g. RADnh3 2015
+    has nsamp=3437 -> 6874 bytes, and the 474-byte error shifted ch2/ch4 by 237
+    samples, ~4.75 us in fast time.)
 
     Columns: `tim`, `COMP_TIME`, and one `chN_offset` column per channel.
     Index: `rseq` (radar sequence number).
@@ -42,6 +51,18 @@ def create_header_df(input_filename, waveform_record_length=6400):
     # 0xff is a sentinel for "no channel" and is treated as 0
     unique_choff = np.unique(choff[choff != 0xff])
     num_channels = len(unique_choff) * 2  # each choff value carries 2 channels
+
+    # Derive the per-channel waveform length (bytes) from the record header unless
+    # the caller supplied one. Samples are int16 (2 bytes each).
+    if waveform_record_length is None:
+        nsamp = np.array([h.nsamp for h in header])
+        valid_nsamp = np.unique(nsamp[choff != 0xff])
+        if len(valid_nsamp) != 1:
+            raise ValueError(
+                f"Expected a single nsamp per file but found {valid_nsamp.tolist()} "
+                f"in {input_filename}; pass waveform_record_length explicitly."
+            )
+        waveform_record_length = int(valid_nsamp[0]) * 2
 
     df_dict = {
         'rseq': rseq,
@@ -82,11 +103,16 @@ def create_header_df(input_filename, waveform_record_length=6400):
     return df
 
 
-def _create_header_df_radjh1(input_filename, waveform_record_length=6400):
+def _create_header_df_radjh1(input_filename, waveform_record_length=None):
     """Header DataFrame for one RADjh1 (HiCARS1) bxds file.
 
     RADjh1 files have no per-record headers — just raw trace data of fixed length.
+    HiCARS1 traces are 3200 int16 samples (6400 bytes); with no per-record header
+    to read nsamp from, this length is used as the default and validated against
+    the file size below.
     """
+    if waveform_record_length is None:
+        waveform_record_length = 6400
     ct_data = stream_util.load_ct_file(input_filename)
     ct_data = stream_util.parse_CT(ct_data)
 
