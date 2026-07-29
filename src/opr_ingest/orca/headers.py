@@ -27,7 +27,9 @@ import yaml
 
 from opr_ingest.orca.uhd_log import parse_start_timestamp
 
-
+# These sample types correspond to CPU formats in the USRP configuration. See:
+# https://files.ettus.com/manual/structuhd_1_1stream__args__t.html#a602a64b4937a85dba84e7f724387e252
+#   (cpu_format section)
 # fc32 = pair of float32 (8 bytes per complex sample);
 # sc16 = pair of int16  (4 bytes);
 # sc8  = pair of int8   (2 bytes).
