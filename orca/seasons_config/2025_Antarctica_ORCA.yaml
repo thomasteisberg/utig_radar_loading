@@ -110,7 +110,7 @@ params:
     # Static across all current SORA recordings (B205mini, single-channel):
     adc_bits: 12                          # B205mini ADC width
     Vpp_scale: 1                          # full-scale Vpp; refine when calibrated
-    lever_arm_fh: "@lever_arm_ORCA"       # see orca/matlab/lever_arm_ORCA.m (stub returning zeros)
+    lever_arm_fh: "@lever_arm"            # opr lever_arm.m; zeros for this season until measured
     size: 1                               # 1 board
     # Sample format overrides for v425 (added on thatcher/v425-flexible-
     # sample-format branch of opr). v425's UTIG defaults are int16 real,
@@ -175,9 +175,9 @@ params:
     chunk_len: 5000
     sar_type: "'fk'"
     surf_filt_dist: 30             # m; replaces sar.m's 3000m airborne default
-    # ORCA-specific lever arm; matches radar.lever_arm_fh and the
-    # gRadar.cluster.hidden_depend_funs entry on the OPR host.
-    lever_arm_fh: "@lever_arm_ORCA"
+    # Matches radar.lever_arm_fh. opr's lever_arm.m has a 2025_Antarctica_ORCA
+    # entry returning zero phase centers until the geometry is measured.
+    lever_arm_fh: "@lever_arm"
     # ORCA has no IMU; roll/pitch/heading are zeros, so motion compensation
     # would be a no-op. Disable to avoid surprises.
     mocomp.en: 0
