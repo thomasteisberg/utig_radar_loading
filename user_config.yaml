@@ -15,7 +15,7 @@ orca_file_index_cache: "outputs/orca_file_index.csv"
 # gps_<seg>.mat, and OPR loads absolute paths directly. A relative path would
 # be resolved against the shared (often read-only) gRadar.support_path. Point
 # this at your own scratch (parallels header_base_dir).
-orca_gps_base_dir: "/kucresis/scratch/tchamberlin_sta/opr_user_tmp/gps"  # TODO: confirm your scratch
+orca_gps_base_dir: "/kucresis/scratch/[USERNAME_HERE]/opr_user_tmp/gps"  # TODO: confirm your scratch
 
 # Base directories for outputs (season name is appended automatically)
 gps_support_base_dir: "outputs/gps"  # UTIG only
